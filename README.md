@@ -9,6 +9,67 @@
 
 一个面向毕业设计场景开发的全栈项目，目标是构建一套兼顾内容展示、用户兴趣建模、行为采集、推荐分发与后台管理的新闻推荐系统。当前版本已经完成前后端基础架构与核心业务闭环，适合作为初始答辩版本、中期展示版本和后续优化迭代的基础。
 
+## 答辩演示快速启动
+
+本项目已经做过一轮最小安全修复，目标是保证毕业设计答辩阶段“能稳定启动、权限边界清晰、明显安全问题已收口”，同时尽量不破坏现有功能。
+
+### 1. 后端启动前准备
+
+请先准备本地 MySQL，并创建数据库：
+
+```sql
+CREATE DATABASE news_recommendation DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+后端现在强制通过环境变量读取数据库和 JWT 配置，不再允许使用默认弱密钥。
+
+PowerShell 示例：
+
+```powershell
+$env:SPRING_PROFILES_ACTIVE="dev"
+$env:DB_HOST="127.0.0.1"
+$env:DB_PORT="3306"
+$env:DB_NAME="news_recommendation"
+$env:DB_USERNAME="root"
+$env:DB_PASSWORD="你的MySQL密码"
+$env:JWT_SECRET="请替换为长度至少32位的随机字符串"
+```
+
+启动后端：
+
+```powershell
+cd backend
+mvn spring-boot:run
+```
+
+健康检查：
+
+```text
+GET http://localhost:8080/api/health
+```
+
+### 2. 前端启动
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+默认访问地址：
+
+```text
+http://localhost:5173
+```
+
+### 3. 本轮最小修复说明
+
+- JWT secret 改为必填环境变量，避免默认 `change-me-in-dev` 被伪造 token。
+- 禁用用户会在 JWT 过滤器层被拦截，旧 token 不再继续访问受保护接口。
+- 采集源增加轻量 SSRF 防护，只允许 `http/https`，并拒绝 `localhost`、`127.*`、`169.254.*` 及常见内网地址。
+- 点赞、收藏、评论计数改为原子更新，降低答辩演示时并发连点导致计数错误的概率。
+- 前端遇到 `401` 会自动清理登录态并拉起登录框，避免页面停在异常状态。
+
 ## 项目概览
 
 - 项目名称：个性化新闻推荐系统
