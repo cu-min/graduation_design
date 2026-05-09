@@ -1,6 +1,22 @@
 # 个性化新闻推荐系统
 
-一个面向毕业设计场景开发的全栈项目，目标是构建一套兼顾内容展示、用户兴趣建模、行为采集、推荐分发与后台管理的新闻推荐系统。当前版本已经完成前后端基础架构与核心业务闭环，适合作为初始答辩版本、课程展示版本和后续优化迭代的基础。
+[![Java](https://img.shields.io/badge/Java-17-1f6feb?style=for-the-badge)](https://www.oracle.com/java/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3-3fb950?style=for-the-badge)](https://spring.io/projects/spring-boot)
+[![React](https://img.shields.io/badge/React-19-61dafb?style=for-the-badge)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6?style=for-the-badge)](https://www.typescriptlang.org/)
+[![MySQL](https://img.shields.io/badge/MySQL-8-005c84?style=for-the-badge)](https://www.mysql.com/)
+[![Redis](https://img.shields.io/badge/Redis-Cache-d73a49?style=for-the-badge)](https://redis.io/)
+
+一个面向毕业设计场景开发的全栈项目，目标是构建一套兼顾内容展示、用户兴趣建模、行为采集、推荐分发与后台管理的新闻推荐系统。当前版本已经完成前后端基础架构与核心业务闭环，适合作为初始答辩版本、中期展示版本和后续优化迭代的基础。
+
+## 项目概览
+
+- 项目名称：个性化新闻推荐系统
+- 项目定位：毕业设计 / 推荐系统原型 / 全栈工程实践项目
+- 前端技术：React 19、TypeScript、Vite、React Router、Axios
+- 后端技术：Spring Boot 3、Spring Security、MyBatis-Plus、JWT
+- 数据支撑：MySQL、Redis
+- 当前状态：已完成基础功能闭环，可继续扩展推荐算法与工程能力
 
 ## 项目背景
 
@@ -10,15 +26,104 @@
 
 ## 开发历程
 
-本项目的开发过程大致经历了以下几个阶段：
-
 1. 明确毕业设计方向，确定以“新闻推荐系统”为核心题目，并将目标拆分为内容管理、用户系统、行为采集、推荐逻辑和后台运营几个模块。
-2. 完成后端 Spring Boot 项目初始化，搭建用户、新闻、分类、标签、评论、行为记录、兴趣权重与爬取配置等数据模型。
+2. 完成后端 Spring Boot 项目初始化，搭建用户、新闻、分类、标签、评论、行为记录、兴趣权重与采集配置等数据模型。
 3. 完成前端 Vite + React 工程搭建，逐步实现首页、新闻详情、个人中心和管理端页面。
 4. 接入登录鉴权、基础权限控制、接口封装与前后端联调，形成可运行的业务闭环。
 5. 增加推荐流、热门流、分类筛选、个人兴趣更新、用户行为采集和后台统计能力，使系统具备更完整的“推荐平台”特征。
 
-当前仓库保存的是本项目的初始完整版本，重点在于跑通核心流程，并为后续算法优化、工程优化和产品完善预留空间。
+## 系统架构图
+
+```mermaid
+flowchart LR
+    U["普通用户"] --> F["前端 Web 应用<br/>React + TypeScript + Vite"]
+    A["管理员"] --> F
+
+    F --> G["接口层<br/>Axios / Router / Auth Store"]
+    G --> B["后端服务<br/>Spring Boot + Spring Security + JWT"]
+
+    B --> M1["用户与认证模块"]
+    B --> M2["新闻内容模块"]
+    B --> M3["推荐服务模块"]
+    B --> M4["评论与行为模块"]
+    B --> M5["后台管理模块"]
+    B --> M6["采集配置模块"]
+
+    M1 --> DB["MySQL"]
+    M2 --> DB
+    M3 --> DB
+    M4 --> DB
+    M5 --> DB
+    M6 --> DB
+
+    M3 --> R["Redis"]
+    M6 --> S["RSS / 外部新闻源"]
+```
+
+## 功能结构图
+
+```mermaid
+flowchart TD
+    P["个性化新闻推荐系统"] --> C1["用户端"]
+    P --> C2["推荐端"]
+    P --> C3["后台管理端"]
+
+    C1 --> U1["注册 / 登录"]
+    C1 --> U2["首页新闻流"]
+    C1 --> U3["新闻详情"]
+    C1 --> U4["个人中心"]
+    C1 --> U5["评论 / 点赞 / 收藏"]
+    C1 --> U6["兴趣标签管理"]
+
+    C2 --> R1["兴趣标签建模"]
+    C2 --> R2["行为数据采集"]
+    C2 --> R3["推荐流生成"]
+    C2 --> R4["热点内容展示"]
+
+    C3 --> A1["新闻管理"]
+    C3 --> A2["数据看板"]
+    C3 --> A3["采集源配置"]
+    C3 --> A4["分类与标签支撑"]
+```
+
+## 核心流程图
+
+### 用户阅读与推荐流程
+
+```mermaid
+flowchart LR
+    L["用户登录"] --> H["进入首页"]
+    H --> X["浏览推荐流 / 最新资讯"]
+    X --> D["查看新闻详情"]
+    D --> B["产生浏览 / 点赞 / 收藏 / 评论行为"]
+    B --> W["更新用户兴趣权重"]
+    W --> R["重新影响推荐结果"]
+    R --> H
+```
+
+### 后台内容运营流程
+
+```mermaid
+flowchart LR
+    S["管理员登录后台"] --> N["查看仪表盘"]
+    N --> M["管理新闻内容"]
+    N --> C["配置采集源"]
+    C --> T["执行或调度 RSS 抓取"]
+    T --> D["写入新闻数据表"]
+    D --> R["进入前台展示与推荐链路"]
+```
+
+## 页面演示导览
+
+当前前端已经具备以下核心页面，适合用于课程展示和答辩演示：
+
+| 页面 | 说明 | 对应文件 |
+| --- | --- | --- |
+| 首页 | 展示推荐流、最新资讯、热门内容、分类筛选与关键词搜索 | `frontend/src/pages/HomePage.tsx` |
+| 新闻详情页 | 查看新闻正文与相关交互 | `frontend/src/pages/NewsDetailPage.tsx` |
+| 个人中心 | 展示用户信息、兴趣偏好与个人交互相关内容 | `frontend/src/pages/ProfilePage.tsx` |
+| 管理后台 | 管理新闻、查看统计、配置采集源 | `frontend/src/pages/AdminDashboardPage.tsx` |
+| 登录弹窗 | 统一处理登录与注册交互 | `frontend/src/components/AuthModal.tsx` |
 
 ## 主要功能
 
@@ -45,7 +150,7 @@
 - 后台新闻管理
 - 后台新闻统计看板
 - 新闻分类与标签支撑
-- 爬虫源配置管理
+- 采集源配置管理
 - RSS 抓取任务基础能力
 - 用户行为与内容热度支撑
 
@@ -89,6 +194,22 @@ graduation_design/
 - `AdminNewsController`：后台新闻管理
 - `AdminDashboardController`：后台统计面板
 - `AdminCrawlConfigController`：采集源配置管理
+
+## 数据模型摘要
+
+当前后端已经设计并初始化了以下核心业务实体：
+
+- 用户 `user`
+- 分类 `category`
+- 标签 `tag`
+- 新闻 `news`
+- 新闻标签关系 `news_tag`
+- 用户兴趣 `user_interest`
+- 用户行为 `user_behavior`
+- 评论 `comment`
+- 采集配置 `crawl_config`
+
+这些表共同支撑了“新闻内容管理 + 用户画像 + 推荐链路 + 后台运营”的系统闭环。
 
 ## 运行环境
 
@@ -144,6 +265,17 @@ VITE_API_BASE_URL=http://localhost:8080
 ```bash
 npm run build
 ```
+
+## 演示建议
+
+如果需要做课堂展示或答辩演示，建议按下面顺序进行：
+
+1. 展示首页，说明推荐流与最新资讯流的切换逻辑。
+2. 演示搜索、分类筛选与热门内容区域。
+3. 进入新闻详情页，说明内容展示与交互行为采集。
+4. 展示个人中心，介绍用户兴趣与个性化推荐关系。
+5. 切换到后台页面，展示数据看板、新闻管理与采集源配置。
+6. 最后回到 README 中的架构图和流程图，总结系统设计思路。
 
 ## 当前版本说明
 
