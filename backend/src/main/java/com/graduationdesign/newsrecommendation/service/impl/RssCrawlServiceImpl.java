@@ -1,6 +1,7 @@
 package com.graduationdesign.newsrecommendation.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.graduationdesign.newsrecommendation.common.RemoteUrlValidator;
 import com.graduationdesign.newsrecommendation.entity.CrawlConfig;
 import com.graduationdesign.newsrecommendation.entity.News;
 import com.graduationdesign.newsrecommendation.entity.NewsTag;
@@ -62,7 +63,7 @@ public class RssCrawlServiceImpl implements CrawlService {
         CrawlConfigMapper crawlConfigMapper
     ) {
         this.httpClient = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NORMAL)
+            .followRedirects(HttpClient.Redirect.NEVER)
             .connectTimeout(Duration.ofSeconds(15))
             .build();
         this.newsMapper = newsMapper;
@@ -95,8 +96,10 @@ public class RssCrawlServiceImpl implements CrawlService {
     }
 
     private CrawlRunResultVO doRunRssCrawl(CrawlConfig crawlConfig) throws Exception {
+        URI sourceUri = RemoteUrlValidator.validatePublicHttpUrl(crawlConfig.getSourceUrl());
+
         HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(crawlConfig.getSourceUrl()))
+            .uri(sourceUri)
             .timeout(Duration.ofSeconds(20))
             .header("User-Agent", "NewsRecommendationBot/1.0")
             .GET()

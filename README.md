@@ -350,3 +350,38 @@ npm run build
 ---
 
 如果你正在查看这个仓库，那么它记录的是一个毕业设计项目从“想法”走向“系统原型”的完整起点。
+## 2026-05 Minimal Security Fix Notes
+
+This project now requires environment variables for JWT and database startup.
+
+Backend config files:
+- `backend/src/main/resources/application.yml`
+- `backend/src/main/resources/application-dev.yml`
+
+Recommended local startup on Windows PowerShell:
+
+```powershell
+$env:SPRING_PROFILES_ACTIVE="dev"
+$env:DB_HOST="127.0.0.1"
+$env:DB_PORT="3306"
+$env:DB_NAME="news_recommendation"
+$env:DB_USERNAME="root"
+$env:DB_PASSWORD="your-local-mysql-password"
+$env:JWT_SECRET="replace-with-a-long-random-secret-at-least-32-bytes"
+cd backend
+mvn spring-boot:run
+```
+
+Frontend startup:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Important notes:
+- `JWT_SECRET` is mandatory.
+- `JWT_SECRET=change-me-in-dev` is forbidden and the backend will fail fast.
+- Crawl source URLs only allow `http/https` and reject localhost, loopback, link-local, and common private network IPs.
+- When a user is disabled, existing JWT access will be rejected on the next request.

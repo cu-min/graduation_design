@@ -4,13 +4,13 @@ import com.graduationdesign.newsrecommendation.entity.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.Date;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 @Component
 public class JwtTokenProvider {
@@ -22,6 +22,9 @@ public class JwtTokenProvider {
         @Value("${security.jwt.secret}") String secret,
         @Value("${security.jwt.expiration}") long expiration
     ) {
+        if (!StringUtils.hasText(secret) || "change-me-in-dev".equals(secret.trim())) {
+            throw new IllegalStateException("JWT_SECRET must be configured and cannot use change-me-in-dev");
+        }
         byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
         this.key = Keys.hmacShaKeyFor(keyBytes);
         this.expiration = expiration;

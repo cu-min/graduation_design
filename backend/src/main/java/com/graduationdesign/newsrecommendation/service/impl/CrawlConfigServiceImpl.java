@@ -1,6 +1,7 @@
 package com.graduationdesign.newsrecommendation.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.graduationdesign.newsrecommendation.common.RemoteUrlValidator;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.graduationdesign.newsrecommendation.dto.CrawlConfigCreateRequest;
 import com.graduationdesign.newsrecommendation.dto.CrawlConfigStatusRequest;
@@ -239,8 +240,11 @@ public class CrawlConfigServiceImpl extends ServiceImpl<CrawlConfigMapper, Crawl
     }
 
     private void fillCrawlConfig(CrawlConfig crawlConfig, CrawlConfigCreateRequest request) {
+        String sourceUrl = request.getSourceUrl().trim();
+        RemoteUrlValidator.validatePublicHttpUrl(sourceUrl);
+
         crawlConfig.setSourceName(request.getSourceName().trim());
-        crawlConfig.setSourceUrl(request.getSourceUrl().trim());
+        crawlConfig.setSourceUrl(sourceUrl);
         crawlConfig.setSourceType(request.getSourceType().trim().toUpperCase());
         crawlConfig.setCategoryId(request.getCategoryId());
         crawlConfig.setEnabled(request.getEnabled());

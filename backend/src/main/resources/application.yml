@@ -5,9 +5,9 @@ spring:
   application:
     name: news-recommendation-backend
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:news_recommendation}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:}
+    url: jdbc:mysql://${DB_HOST}:${DB_PORT}/${DB_NAME}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
   sql:
     init:
@@ -32,7 +32,7 @@ mybatis-plus:
 
 security:
   jwt:
-    secret: ${JWT_SECRET:change-me-in-dev}
+    secret: ${JWT_SECRET}
     expiration: 86400000
 
 logging:

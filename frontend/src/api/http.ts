@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { getApiBaseUrl } from '../utils/env';
 import { clearStoredToken, getStoredToken } from '../utils/auth';
+import { openAuthDialog } from '../utils/authDialog';
 import type { ApiResponse } from '../types';
 
 export const http = axios.create({
@@ -25,6 +26,7 @@ http.interceptors.response.use(
     if (error.response?.status === 401) {
       clearStoredToken();
       window.dispatchEvent(new Event('auth:unauthorized'));
+      openAuthDialog('login');
     }
     return Promise.reject(error);
   },

@@ -12,6 +12,7 @@ import com.graduationdesign.newsrecommendation.entity.News;
 import com.graduationdesign.newsrecommendation.entity.NewsTag;
 import com.graduationdesign.newsrecommendation.entity.Tag;
 import com.graduationdesign.newsrecommendation.entity.User;
+import com.graduationdesign.newsrecommendation.exception.NotFoundException;
 import com.graduationdesign.newsrecommendation.mapper.CategoryMapper;
 import com.graduationdesign.newsrecommendation.mapper.NewsMapper;
 import com.graduationdesign.newsrecommendation.mapper.NewsTagMapper;
@@ -165,7 +166,7 @@ public class NewsServiceImpl extends ServiceImpl<NewsMapper, News> implements Ne
                 .last("LIMIT 1")
         );
         if (news == null) {
-            throw new IllegalArgumentException("News does not exist or has been taken offline");
+            throw new NotFoundException("News does not exist or has been taken offline");
         }
 
         if (currentUser != null) {
@@ -208,7 +209,7 @@ public class NewsServiceImpl extends ServiceImpl<NewsMapper, News> implements Ne
     private News getByIdOrThrow(Long id) {
         News news = getById(id);
         if (news == null) {
-            throw new IllegalArgumentException("News does not exist");
+            throw new NotFoundException("News does not exist");
         }
         return news;
     }

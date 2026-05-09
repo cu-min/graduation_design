@@ -1,11 +1,13 @@
 package com.graduationdesign.newsrecommendation.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.graduationdesign.newsrecommendation.dto.CommentCreateRequest;
 import com.graduationdesign.newsrecommendation.entity.Comment;
 import com.graduationdesign.newsrecommendation.entity.News;
 import com.graduationdesign.newsrecommendation.entity.User;
+import com.graduationdesign.newsrecommendation.exception.NotFoundException;
 import com.graduationdesign.newsrecommendation.mapper.CommentMapper;
 import com.graduationdesign.newsrecommendation.mapper.NewsMapper;
 import com.graduationdesign.newsrecommendation.mapper.UserMapper;
@@ -62,7 +64,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
     @Override
     @Transactional
     public void createNewsComment(Long newsId, Long userId, CommentCreateRequest request) {
-        News news = getActiveNews(newsId);
+        getActiveNews(newsId);
 
         Comment comment = new Comment();
         comment.setNewsId(newsId);
@@ -72,8 +74,12 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
         comment.setStatus(1);
         save(comment);
 
-        news.setCommentCount(news.getCommentCount() + 1);
-        newsMapper.updateById(news);
+        newsMapper.update(
+            null,
+            new LambdaUpdateWrapper<News>()
+                .eq(News::getId, newsId)
+                .setSql("comment_count = comment_count + 1")
+        );
     }
 
     @Override
@@ -84,7 +90,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
             throw new IllegalArgumentException("Only replies to top-level comments are supported");
         }
 
-        News news = getActiveNews(parentComment.getNewsId());
+        getActiveNews(parentComment.getNewsId());
 
         Comment reply = new Comment();
         reply.setNewsId(parentComment.getNewsId());
@@ -94,8 +100,12 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
         reply.setStatus(1);
         save(reply);
 
-        news.setCommentCount(news.getCommentCount() + 1);
-        newsMapper.updateById(news);
+        newsMapper.update(
+            null,
+            new LambdaUpdateWrapper<News>()
+                .eq(News::getId, parentComment.getNewsId())
+                .setSql("comment_count = comment_count + 1")
+        );
     }
 
     @Override
@@ -107,7 +117,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
             throw new IllegalArgumentException("You can only delete your own comments");
         }
 
-        News news = getActiveNews(comment.getNewsId());
+        getActiveNews(comment.getNewsId());
         List<Comment> toDelete = new ArrayList<>();
         toDelete.add(comment);
 
@@ -123,8 +133,12 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
             Comment deletedState = new Comment();
             deletedState.setStatus(0);
             update(deletedState, new LambdaQueryWrapper<Comment>().in(Comment::getId, commentIds));
-            news.setCommentCount(Math.max(0, news.getCommentCount() - commentIds.size()));
-            newsMapper.updateById(news);
+            newsMapper.update(
+                null,
+                new LambdaUpdateWrapper<News>()
+                    .eq(News::getId, comment.getNewsId())
+                    .setSql("comment_count = GREATEST(comment_count - " + commentIds.size() + ", 0)")
+            );
         }
     }
 
@@ -182,7 +196,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
     private Comment getActiveComment(Long commentId) {
         Comment comment = getById(commentId);
         if (comment == null || comment.getStatus() == null || comment.getStatus() != 1) {
-            throw new IllegalArgumentException("Comment does not exist");
+            throw new NotFoundException("Comment does not exist");
         }
         return comment;
     }
@@ -190,7 +204,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
     private News getActiveNews(Long newsId) {
         News news = newsMapper.selectById(newsId);
         if (news == null || news.getStatus() == null || news.getStatus() != 1) {
-            throw new IllegalArgumentException("News does not exist or has been taken offline");
+            throw new NotFoundException("News does not exist or has been taken offline");
         }
         return news;
     }

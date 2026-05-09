@@ -1,7 +1,6 @@
 package com.graduationdesign.newsrecommendation.exception;
 
 import com.graduationdesign.newsrecommendation.common.Result;
-import com.graduationdesign.newsrecommendation.exception.UnauthorizedException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
@@ -44,6 +43,12 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public Result<Void> handleUnauthorizedException(UnauthorizedException exception) {
         return Result.failure(HttpStatus.UNAUTHORIZED.value(), exception.getMessage());
+    }
+
+    @ExceptionHandler(NotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public Result<Void> handleNotFoundException(NotFoundException exception) {
+        return Result.failure(HttpStatus.NOT_FOUND.value(), exception.getMessage());
     }
 
     @ExceptionHandler(Exception.class)
