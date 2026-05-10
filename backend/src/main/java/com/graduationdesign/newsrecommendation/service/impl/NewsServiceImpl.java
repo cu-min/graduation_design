@@ -26,6 +26,7 @@ import com.graduationdesign.newsrecommendation.vo.NewsActionStatusVO;
 import com.graduationdesign.newsrecommendation.vo.NewsDetailVO;
 import com.graduationdesign.newsrecommendation.vo.NewsListVO;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -181,6 +182,63 @@ public class NewsServiceImpl extends ServiceImpl<NewsMapper, News> implements Ne
     }
 
     @Override
+    public List<NewsListVO> listRelatedNews(Long id, int limit) {
+        int safeLimit = Math.min(Math.max(limit, 1), 8);
+        News currentNews = getOne(
+            new LambdaQueryWrapper<News>()
+                .eq(News::getId, id)
+                .eq(News::getStatus, 1)
+                .last("LIMIT 1")
+        );
+        if (currentNews == null) {
+            throw new NotFoundException("News does not exist or has been taken offline");
+        }
+
+        Set<Long> currentTagIds = newsTagMapper.selectList(
+            new LambdaQueryWrapper<NewsTag>().eq(NewsTag::getNewsId, id)
+        ).stream().map(NewsTag::getTagId).collect(Collectors.toCollection(LinkedHashSet::new));
+
+        Map<Long, Long> overlapCountMap = Collections.emptyMap();
+        Set<Long> tagMatchedNewsIds = new LinkedHashSet<>();
+        if (!currentTagIds.isEmpty()) {
+            List<NewsTag> matchedNewsTags = newsTagMapper.selectList(
+                new LambdaQueryWrapper<NewsTag>()
+                    .in(NewsTag::getTagId, currentTagIds)
+                    .ne(NewsTag::getNewsId, id)
+            );
+            tagMatchedNewsIds = matchedNewsTags.stream()
+                .map(NewsTag::getNewsId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+            overlapCountMap = matchedNewsTags.stream()
+                .collect(Collectors.groupingBy(NewsTag::getNewsId, Collectors.counting()));
+        }
+
+        List<News> candidates = queryRelatedCandidates(currentNews, tagMatchedNewsIds, safeLimit);
+        if (candidates.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Map<Long, Long> finalOverlapCountMap = overlapCountMap;
+        return buildPublicNewsList(
+            candidates.stream()
+                .sorted(
+                    Comparator
+                        .comparingLong((News news) -> finalOverlapCountMap.getOrDefault(news.getId(), 0L))
+                        .reversed()
+                        .thenComparing(
+                            (News news) -> Objects.equals(news.getCategoryId(), currentNews.getCategoryId()) ? 1 : 0,
+                            Comparator.reverseOrder()
+                        )
+                        .thenComparing(News::getHeatScore, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(News::getPublishTime, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(News::getId, Comparator.reverseOrder())
+                )
+                .limit(safeLimit)
+                .toList()
+        );
+    }
+
+    @Override
     public List<HotNewsVO> listHotNews(int limit) {
         int safeLimit = Math.min(Math.max(limit, 1), 20);
         Page<News> pageResult = page(
@@ -204,6 +262,43 @@ public class NewsServiceImpl extends ServiceImpl<NewsMapper, News> implements Ne
         return pageResult.getRecords().stream()
             .map(news -> toHotNewsVO(news, relatedData))
             .toList();
+    }
+
+    private List<News> queryRelatedCandidates(News currentNews, Set<Long> tagMatchedNewsIds, int safeLimit) {
+        Page<News> candidatePage = new Page<>(1, Math.max(safeLimit * 4L, 12L));
+        LambdaQueryWrapper<News> queryWrapper = new LambdaQueryWrapper<News>()
+            .eq(News::getStatus, 1)
+            .ne(News::getId, currentNews.getId());
+
+        if (!tagMatchedNewsIds.isEmpty()) {
+            queryWrapper.and(wrapper -> wrapper
+                .eq(News::getCategoryId, currentNews.getCategoryId())
+                .or()
+                .in(News::getId, tagMatchedNewsIds)
+            );
+        } else {
+            queryWrapper.eq(News::getCategoryId, currentNews.getCategoryId());
+        }
+
+        queryWrapper
+            .orderByDesc(News::getHeatScore)
+            .orderByDesc(News::getPublishTime)
+            .orderByDesc(News::getId);
+
+        List<News> candidates = page(candidatePage, queryWrapper).getRecords();
+        if (!candidates.isEmpty()) {
+            return candidates;
+        }
+
+        return page(
+            new Page<>(1, safeLimit),
+            new LambdaQueryWrapper<News>()
+                .eq(News::getStatus, 1)
+                .ne(News::getId, currentNews.getId())
+                .orderByDesc(News::getHeatScore)
+                .orderByDesc(News::getPublishTime)
+                .orderByDesc(News::getId)
+        ).getRecords();
     }
 
     private News getByIdOrThrow(Long id) {

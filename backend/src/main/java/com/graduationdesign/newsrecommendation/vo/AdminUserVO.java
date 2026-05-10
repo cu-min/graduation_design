@@ -1,6 +1,8 @@
 package com.graduationdesign.newsrecommendation.vo;
 
-public class ProfileSummaryVO {
+import java.time.LocalDateTime;
+
+public class AdminUserVO {
 
     private Long id;
     private String username;
@@ -9,10 +11,9 @@ public class ProfileSummaryVO {
     private String phone;
     private String avatar;
     private String role;
-    private Integer favoriteCount;
-    private Integer likeCount;
-    private Integer commentCount;
-    private Integer historyCount;
+    private Integer status;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
 
     public Long getId() {
         return id;
@@ -70,35 +71,27 @@ public class ProfileSummaryVO {
         this.role = role;
     }
 
-    public Integer getFavoriteCount() {
-        return favoriteCount;
+    public Integer getStatus() {
+        return status;
     }
 
-    public void setFavoriteCount(Integer favoriteCount) {
-        this.favoriteCount = favoriteCount;
+    public void setStatus(Integer status) {
+        this.status = status;
     }
 
-    public Integer getLikeCount() {
-        return likeCount;
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
     }
 
-    public void setLikeCount(Integer likeCount) {
-        this.likeCount = likeCount;
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
     }
 
-    public Integer getCommentCount() {
-        return commentCount;
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
     }
 
-    public void setCommentCount(Integer commentCount) {
-        this.commentCount = commentCount;
-    }
-
-    public Integer getHistoryCount() {
-        return historyCount;
-    }
-
-    public void setHistoryCount(Integer historyCount) {
-        this.historyCount = historyCount;
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
     }
 }

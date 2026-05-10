@@ -2,12 +2,16 @@ package com.graduationdesign.newsrecommendation.controller;
 
 import com.graduationdesign.newsrecommendation.common.PageResult;
 import com.graduationdesign.newsrecommendation.common.Result;
+import com.graduationdesign.newsrecommendation.dto.PasswordUpdateRequest;
+import com.graduationdesign.newsrecommendation.dto.ProfileUpdateRequest;
 import com.graduationdesign.newsrecommendation.dto.UserInterestUpdateRequest;
 import com.graduationdesign.newsrecommendation.entity.Tag;
 import com.graduationdesign.newsrecommendation.entity.User;
 import com.graduationdesign.newsrecommendation.security.CurrentUser;
 import com.graduationdesign.newsrecommendation.service.ProfileService;
 import com.graduationdesign.newsrecommendation.service.UserInterestService;
+import com.graduationdesign.newsrecommendation.service.UserService;
+import com.graduationdesign.newsrecommendation.vo.CurrentUserVO;
 import com.graduationdesign.newsrecommendation.vo.ProfileCommentVO;
 import com.graduationdesign.newsrecommendation.vo.ProfileNewsItemVO;
 import com.graduationdesign.newsrecommendation.vo.ProfileSummaryVO;
@@ -26,10 +30,16 @@ public class ProfileController {
 
     private final ProfileService profileService;
     private final UserInterestService userInterestService;
+    private final UserService userService;
 
-    public ProfileController(ProfileService profileService, UserInterestService userInterestService) {
+    public ProfileController(
+        ProfileService profileService,
+        UserInterestService userInterestService,
+        UserService userService
+    ) {
         this.profileService = profileService;
         this.userInterestService = userInterestService;
+        this.userService = userService;
     }
 
     @GetMapping("/summary")
@@ -76,6 +86,23 @@ public class ProfileController {
     @GetMapping("/interests")
     public Result<List<Tag>> interests(@CurrentUser User currentUser) {
         return Result.success(userInterestService.listCurrentUserInterests(currentUser.getId()));
+    }
+
+    @PutMapping("/basic")
+    public Result<CurrentUserVO> updateBasic(
+        @CurrentUser User currentUser,
+        @Valid @RequestBody ProfileUpdateRequest request
+    ) {
+        return Result.success(userService.updateCurrentUserProfile(currentUser, request));
+    }
+
+    @PutMapping("/password")
+    public Result<Void> updatePassword(
+        @CurrentUser User currentUser,
+        @Valid @RequestBody PasswordUpdateRequest request
+    ) {
+        userService.updateCurrentUserPassword(currentUser, request);
+        return Result.success();
     }
 
     @PutMapping("/interests")

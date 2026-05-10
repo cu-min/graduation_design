@@ -121,7 +121,6 @@ function HomePage() {
   return (
     <section className="news-home-page">
       <div className="home-hero page-card">
-        <p className="page-eyebrow">阶段 9</p>
         <h1>面向年轻人的趋势资讯首页</h1>
         <p className="page-description">
           登录后默认展示“为你推荐”。推荐结果会结合你的兴趣标签、浏览、点赞、收藏等行为生成，同时保留“最新资讯”入口方便查看普通新闻流。
@@ -149,13 +148,6 @@ function HomePage() {
             最新资讯
           </button>
         </div>
-
-        {isShowingRecommendFeed ? (
-          <div className="recommend-explainer">
-            <strong>推荐说明</strong>
-            <span>推荐结果会结合你的兴趣标签、浏览、点赞、收藏、评论等行为生成。</span>
-          </div>
-        ) : null}
 
         <form className="news-search-bar" onSubmit={handleSearchSubmit}>
           <input
@@ -193,12 +185,6 @@ function HomePage() {
               第 {visiblePage.page} 页 / 共 {totalPages} 页 · {visiblePage.total} 条
             </span>
           </div>
-
-          {hasActiveFilters ? (
-            <p className="section-meta">
-              当前已启用搜索或分类筛选，列表会切换到普通新闻流，避免推荐结果和筛选条件相互干扰。
-            </p>
-          ) : null}
 
           {isLoading ? (
             <div className="page-card news-state-card">正在加载新闻列表...</div>

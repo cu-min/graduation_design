@@ -1,0 +1,25 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:${random.uuid};MODE=MySQL;NON_KEYWORDS=USER
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  sql:
+    init:
+      mode: always
+      encoding: UTF-8
+      schema-locations: classpath:schema-test.sql
+      data-locations: classpath:data-test.sql
+  data:
+    redis:
+      repositories:
+        enabled: false
+
+security:
+  jwt:
+    secret: test-news-recommendation-secret-key-1234567890
+    expiration: 86400000
+
+logging:
+  level:
+    root: warn

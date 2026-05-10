@@ -100,7 +100,6 @@ function AuthModal({ isOpen, initialMode = 'login', onClose }: AuthModalProps) {
       >
         <div className="auth-header">
           <div>
-            <p className="auth-eyebrow">阶段 2</p>
             <h2>登录 / 注册</h2>
           </div>
           <button type="button" className="ghost-button" onClick={onClose}>

@@ -5,6 +5,7 @@ import type {
   NewsDetail,
   NewsListItem,
   PageResult,
+  RelatedNewsItem,
 } from '../types';
 
 type NewsListParams = {
@@ -28,6 +29,13 @@ export async function fetchNewsDetail(id: number) {
 
 export async function fetchHotNews(limit = 10) {
   const response = await http.get<ApiResponse<HotNewsItem[]>>('/news/hot', {
+    params: { limit },
+  });
+  return response.data;
+}
+
+export async function fetchRelatedNews(id: number, limit = 4) {
+  const response = await http.get<ApiResponse<RelatedNewsItem[]>>(`/news/${id}/related`, {
     params: { limit },
   });
   return response.data;

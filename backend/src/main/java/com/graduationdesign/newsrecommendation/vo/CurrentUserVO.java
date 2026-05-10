@@ -6,6 +6,7 @@ public class CurrentUserVO {
     private String username;
     private String nickname;
     private String email;
+    private String phone;
     private String avatar;
     private String role;
 
@@ -39,6 +40,14 @@ public class CurrentUserVO {
 
     public void setEmail(String email) {
         this.email = email;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+
+    public void setPhone(String phone) {
+        this.phone = phone;
     }
 
     public String getAvatar() {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   dislikeNews,
@@ -14,9 +14,14 @@ import {
   fetchNewsComments,
   replyComment,
 } from '../api/comments';
-import { fetchNewsDetail } from '../api/news';
+import { fetchNewsDetail, fetchRelatedNews } from '../api/news';
 import { useAuth } from '../store';
-import type { CommentItem, NewsActionStatus, NewsDetail } from '../types';
+import type {
+  CommentItem,
+  NewsActionStatus,
+  NewsDetail,
+  RelatedNewsItem,
+} from '../types';
 import { openAuthDialog } from '../utils/authDialog';
 import { getErrorMessage } from '../utils/request';
 
@@ -24,8 +29,10 @@ function NewsDetailPage() {
   const { id } = useParams();
   const { isAuthenticated, currentUser } = useAuth();
   const [news, setNews] = useState<NewsDetail | null>(null);
+  const [relatedNews, setRelatedNews] = useState<RelatedNewsItem[]>([]);
   const [comments, setComments] = useState<CommentItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRelatedLoading, setIsRelatedLoading] = useState(true);
   const [isCommentsLoading, setIsCommentsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [commentText, setCommentText] = useState('');
@@ -57,6 +64,24 @@ function NewsDetailPage() {
     }
   };
 
+  const loadRelatedNews = async () => {
+    if (!newsId || Number.isNaN(newsId)) {
+      setRelatedNews([]);
+      setIsRelatedLoading(false);
+      return;
+    }
+
+    setIsRelatedLoading(true);
+    try {
+      const result = await fetchRelatedNews(newsId, 4);
+      setRelatedNews(result.data);
+    } catch {
+      setRelatedNews([]);
+    } finally {
+      setIsRelatedLoading(false);
+    }
+  };
+
   const loadComments = async () => {
     if (!newsId || Number.isNaN(newsId)) {
       setIsCommentsLoading(false);
@@ -75,7 +100,7 @@ function NewsDetailPage() {
   };
 
   useEffect(() => {
-    void Promise.all([loadNewsDetail(), loadComments()]);
+    void Promise.all([loadNewsDetail(), loadRelatedNews(), loadComments()]);
   }, [id, isAuthenticated]);
 
   const requireLogin = () => {
@@ -137,7 +162,7 @@ function NewsDetailPage() {
     try {
       const result = await dislikeNews(news.id);
       applyActionStatus(result.data);
-      setActionFeedback('已记录为不感兴趣');
+      setActionFeedback('已标记为不感兴趣');
     } catch (error) {
       setActionFeedback(getErrorMessage(error, '不感兴趣操作失败'));
     }
@@ -154,17 +179,17 @@ function NewsDetailPage() {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(window.location.href);
       }
-      setActionFeedback('已记录分享，并复制当前链接');
+      setActionFeedback('已复制当前链接');
     } catch (error) {
-      setActionFeedback(getErrorMessage(error, '分享记录失败'));
+      setActionFeedback(getErrorMessage(error, '分享操作失败'));
     }
   };
 
   const refreshDetailAndComments = async () => {
-    await Promise.all([loadNewsDetail(), loadComments()]);
+    await Promise.all([loadNewsDetail(), loadRelatedNews(), loadComments()]);
   };
 
-  const handleSubmitComment = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmitComment = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!isAuthenticated || !news) {
       requireLogin();
@@ -236,9 +261,8 @@ function NewsDetailPage() {
   if (!news) {
     return (
       <div className="page-card news-state-card">
-        <p className="page-eyebrow">阶段 9</p>
         <h1>新闻暂不可访问</h1>
-        <p className="page-description">{errorMessage || '新闻不存在，或该新闻已下架。'}</p>
+        <p className="page-description">{errorMessage || '新闻不存在，或该新闻已下线。'}</p>
         <Link to="/" className="ghost-button">
           返回首页
         </Link>
@@ -317,10 +341,44 @@ function NewsDetailPage() {
         </div>
       </article>
 
+      <section className="page-card related-news-section">
+        <div className="section-heading compact">
+          <div>
+            <h2>相关推荐</h2>
+          </div>
+          <span className="section-meta">根据分类和标签匹配生成</span>
+        </div>
+
+        {isRelatedLoading ? (
+          <div className="news-state-card compact-empty-state">正在加载相关推荐...</div>
+        ) : relatedNews.length === 0 ? (
+          <div className="news-state-card compact-empty-state">暂时没有可展示的相关推荐。</div>
+        ) : (
+          <div className="related-news-grid">
+            {relatedNews.map((item) => (
+              <Link key={item.id} to={`/news/${item.id}`} className="related-news-card">
+                <NewsDetailCover imageUrl={item.coverImage} title={item.title} compact />
+                <div className="related-news-body">
+                  <div className="news-card-topline">
+                    <span className="news-category-chip">{item.categoryName}</span>
+                    <span className="news-time">{formatDisplayDate(item.publishTime)}</span>
+                  </div>
+                  <h3>{item.title}</h3>
+                  <p>{item.summary}</p>
+                  <div className="news-metrics">
+                    <span>热度 {item.heatScore}</span>
+                    <span>浏览 {item.viewCount}</span>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+
       <section className="page-card comment-section">
         <div className="section-heading compact">
           <div>
-            <p className="page-eyebrow">互动区</p>
             <h2>评论与回复</h2>
           </div>
           <span className="section-meta">共 {news.commentCount} 条评论</span>
@@ -442,19 +500,28 @@ function NewsDetailPage() {
   );
 }
 
-function NewsDetailCover({ imageUrl, title }: { imageUrl: string; title: string }) {
+function NewsDetailCover({
+  imageUrl,
+  title,
+  compact = false,
+}: {
+  imageUrl: string;
+  title: string;
+  compact?: boolean;
+}) {
   const [hasError, setHasError] = useState(false);
+  const className = compact ? 'news-detail-cover related-news-cover' : 'news-detail-cover';
 
   if (!imageUrl || hasError) {
     return (
-      <div className="news-detail-cover news-cover-empty">
-        <span>{title.slice(0, 24)}</span>
+      <div className={`${className} news-cover-empty`}>
+        <span>{title.slice(0, compact ? 20 : 24)}</span>
       </div>
     );
   }
 
   return (
-    <div className="news-detail-cover">
+    <div className={className}>
       <img src={imageUrl} alt={title} onError={() => setHasError(true)} />
     </div>
   );

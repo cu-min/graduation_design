@@ -1,5 +1,5 @@
 type PagePlaceholderProps = {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
   description: string;
 };
@@ -7,7 +7,7 @@ type PagePlaceholderProps = {
 function PagePlaceholder({ eyebrow, title, description }: PagePlaceholderProps) {
   return (
     <section className="page-card">
-      <p className="page-eyebrow">{eyebrow}</p>
+      {eyebrow ? <p className="page-eyebrow">{eyebrow}</p> : null}
       <h1>{title}</h1>
       <p className="page-description">{description}</p>
     </section>

@@ -54,6 +54,8 @@ public class ProfileServiceImpl implements ProfileService {
         vo.setUsername(currentUser.getUsername());
         vo.setNickname(currentUser.getNickname());
         vo.setEmail(currentUser.getEmail());
+        vo.setPhone(currentUser.getPhone());
+        vo.setAvatar(currentUser.getAvatar());
         vo.setRole(currentUser.getRole());
         vo.setFavoriteCount(userBehaviorMapper.selectCount(behaviorWrapper(currentUser.getId(), BehaviorActionType.FAVORITE)).intValue());
         vo.setLikeCount(userBehaviorMapper.selectCount(behaviorWrapper(currentUser.getId(), BehaviorActionType.LIKE)).intValue());

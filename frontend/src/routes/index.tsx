@@ -4,6 +4,7 @@ import AdminDashboardPage from '../pages/AdminDashboardPage';
 import HomePage from '../pages/HomePage';
 import NewsDetailPage from '../pages/NewsDetailPage';
 import ProfilePage from '../pages/ProfilePage';
+import AdminRouteGuard from './AdminRouteGuard';
 
 export const router = createBrowserRouter([
   {
@@ -24,7 +25,11 @@ export const router = createBrowserRouter([
       },
       {
         path: 'admin',
-        element: <AdminDashboardPage />,
+        element: (
+          <AdminRouteGuard>
+            <AdminDashboardPage />
+          </AdminRouteGuard>
+        ),
       },
     ],
   },

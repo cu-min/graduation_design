@@ -32,5 +32,7 @@ public interface NewsService extends IService<News> {
 
     NewsDetailVO getPublicNewsDetail(Long id, User currentUser);
 
+    List<NewsListVO> listRelatedNews(Long id, int limit);
+
     List<HotNewsVO> listHotNews(int limit);
 }

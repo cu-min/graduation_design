@@ -1,10 +1,13 @@
 import { http } from './http';
 import type {
   ApiResponse,
+  AuthUser,
   PageResult,
+  PasswordUpdateRequest,
   ProfileCommentItem,
   ProfileNewsItem,
   ProfileSummary,
+  ProfileUpdateRequest,
   TagOption,
   UserInterestUpdateRequest,
 } from '../types';
@@ -41,6 +44,16 @@ export async function fetchProfileComments(params: PageParams) {
 
 export async function fetchProfileInterests() {
   const response = await http.get<ApiResponse<TagOption[]>>('/profile/interests');
+  return response.data;
+}
+
+export async function updateProfileBasic(payload: ProfileUpdateRequest) {
+  const response = await http.put<ApiResponse<AuthUser>>('/profile/basic', payload);
+  return response.data;
+}
+
+export async function updateProfilePassword(payload: PasswordUpdateRequest) {
+  const response = await http.put<ApiResponse<null>>('/profile/password', payload);
   return response.data;
 }
 

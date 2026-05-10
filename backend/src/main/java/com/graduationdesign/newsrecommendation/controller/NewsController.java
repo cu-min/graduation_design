@@ -44,4 +44,12 @@ public class NewsController {
     public Result<NewsDetailVO> detail(@PathVariable Long id, @CurrentUser User currentUser) {
         return Result.success(newsService.getPublicNewsDetail(id, currentUser));
     }
+
+    @GetMapping("/{id}/related")
+    public Result<List<NewsListVO>> related(
+        @PathVariable Long id,
+        @RequestParam(defaultValue = "4") int limit
+    ) {
+        return Result.success(newsService.listRelatedNews(id, limit));
+    }
 }

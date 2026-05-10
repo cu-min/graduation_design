@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchTags } from '../api/metadata';
 import {
@@ -8,34 +8,53 @@ import {
   fetchProfileInterests,
   fetchProfileLikes,
   fetchProfileSummary,
+  updateProfileBasic,
   updateProfileInterests,
+  updateProfilePassword,
 } from '../api/profile';
 import { useAuth } from '../store';
 import type {
   PageResult,
+  PasswordUpdateRequest,
   ProfileCommentItem,
   ProfileNewsItem,
   ProfileSummary,
+  ProfileUpdateRequest,
   TagOption,
 } from '../types';
 import { openAuthDialog } from '../utils/authDialog';
 import { getErrorMessage } from '../utils/request';
 
-type ProfileTab = 'summary' | 'interests' | 'history' | 'favorites' | 'likes' | 'comments';
+type ProfileTab = 'summary' | 'interests' | 'history' | 'favorites' | 'likes' | 'comments' | 'settings';
 
-const tabItems: { key: ProfileTab; label: string }[] = [
-  { key: 'summary', label: '我的资料' },
+const tabItems: Array<{ key: ProfileTab; label: string }> = [
+  { key: 'summary', label: '个人资料' },
   { key: 'interests', label: '兴趣标签' },
-  { key: 'history', label: '浏览历史' },
+  { key: 'history', label: '浏览记录' },
   { key: 'favorites', label: '我的收藏' },
   { key: 'likes', label: '我的点赞' },
   { key: 'comments', label: '我的评论' },
+  { key: 'settings', label: '账号设置' },
 ];
 
+const initialProfileForm: ProfileUpdateRequest = {
+  nickname: '',
+  email: '',
+  phone: '',
+  avatar: '',
+};
+
+const initialPasswordForm: PasswordUpdateRequest = {
+  currentPassword: '',
+  newPassword: '',
+};
+
 function ProfilePage() {
-  const { currentUser, isAuthenticated, isBootstrapping } = useAuth();
+  const { currentUser, isAuthenticated, isBootstrapping, refreshCurrentUser, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<ProfileTab>('summary');
   const [summary, setSummary] = useState<ProfileSummary | null>(null);
+  const [profileForm, setProfileForm] = useState<ProfileUpdateRequest>(initialProfileForm);
+  const [passwordForm, setPasswordForm] = useState<PasswordUpdateRequest>(initialPasswordForm);
   const [allTags, setAllTags] = useState<TagOption[]>([]);
   const [selectedInterestIds, setSelectedInterestIds] = useState<number[]>([]);
   const [newsPageData, setNewsPageData] = useState<PageResult<ProfileNewsItem>>({
@@ -51,9 +70,11 @@ function ProfilePage() {
     size: 6,
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isSavingInterests, setIsSavingInterests] = useState(false);
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-  const [isSavingInterests, setIsSavingInterests] = useState(false);
 
   const totalPages = useMemo(() => {
     const target = activeTab === 'comments' ? commentPageData : newsPageData;
@@ -61,13 +82,13 @@ function ProfilePage() {
   }, [activeTab, commentPageData, newsPageData]);
 
   const groupedTags = useMemo(() => {
-    const map = new Map<number, TagOption[]>();
+    const tagMap = new Map<number, TagOption[]>();
     for (const tag of allTags) {
-      const current = map.get(tag.categoryId) ?? [];
+      const current = tagMap.get(tag.categoryId) ?? [];
       current.push(tag);
-      map.set(tag.categoryId, current);
+      tagMap.set(tag.categoryId, current);
     }
-    return Array.from(map.entries());
+    return Array.from(tagMap.entries());
   }, [allTags]);
 
   const selectedInterestTags = useMemo(
@@ -75,9 +96,19 @@ function ProfilePage() {
     [allTags, selectedInterestIds],
   );
 
+  const applySummary = (nextSummary: ProfileSummary) => {
+    setSummary(nextSummary);
+    setProfileForm({
+      nickname: nextSummary.nickname || '',
+      email: nextSummary.email || '',
+      phone: nextSummary.phone || '',
+      avatar: nextSummary.avatar || '',
+    });
+  };
+
   const loadSummary = async () => {
     const result = await fetchProfileSummary();
-    setSummary(result.data);
+    applySummary(result.data);
   };
 
   const loadInterests = async () => {
@@ -93,12 +124,19 @@ function ProfilePage() {
 
     try {
       if (tab === 'summary') {
-        await Promise.all([loadSummary(), loadInterests()]);
+        await loadSummary();
         return;
       }
 
       if (tab === 'interests') {
         await loadInterests();
+        return;
+      }
+
+      if (tab === 'settings') {
+        if (!summary) {
+          await loadSummary();
+        }
         return;
       }
 
@@ -157,6 +195,45 @@ function ProfilePage() {
     }
   };
 
+  const handleSaveProfile = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSavingProfile(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    try {
+      await updateProfileBasic({
+        ...profileForm,
+        phone: profileForm.phone?.trim() || undefined,
+        avatar: profileForm.avatar?.trim() || undefined,
+      });
+      await refreshCurrentUser();
+      await loadSummary();
+      setSuccessMessage('个人资料已更新');
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, '个人资料更新失败'));
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleUpdatePassword = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSavingPassword(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    try {
+      await updateProfilePassword(passwordForm);
+      setPasswordForm(initialPasswordForm);
+      setSuccessMessage('密码修改成功');
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, '密码修改失败'));
+    } finally {
+      setIsSavingPassword(false);
+    }
+  };
+
   if (isBootstrapping) {
     return <div className="page-card news-state-card">正在恢复登录状态...</div>;
   }
@@ -164,11 +241,8 @@ function ProfilePage() {
   if (!isAuthenticated || !currentUser) {
     return (
       <div className="page-card news-state-card">
-        <p className="page-eyebrow">阶段 9</p>
         <h1>请先登录后查看个人中心</h1>
-        <p className="page-description">
-          登录后可以查看你的浏览历史、收藏、点赞、评论记录，并管理兴趣标签和基础用户画像。
-        </p>
+        <p className="page-description">登录后可以查看浏览记录、收藏、点赞、评论，以及管理自己的资料和兴趣标签。</p>
         <button type="button" className="primary-button" onClick={() => openAuthDialog('login')}>
           去登录
         </button>
@@ -176,17 +250,53 @@ function ProfilePage() {
     );
   }
 
+  const displayName = summary?.nickname || currentUser.nickname || currentUser.username;
+  const avatarValue = profileForm.avatar || summary?.avatar || currentUser.avatar || '';
+
   return (
     <section className="profile-page">
-      <div className="page-card profile-shell">
-        <aside className="profile-sidebar">
-          <div className="profile-user-card">
-            <p className="page-eyebrow">阶段 9</p>
-            <h1>{currentUser.nickname || currentUser.username}</h1>
-            <p>{currentUser.email || '未设置邮箱'}</p>
-            <span className="news-category-chip">{currentUser.role}</span>
+      {errorMessage ? <p className="auth-feedback error">{errorMessage}</p> : null}
+      {successMessage ? <p className="auth-feedback success">{successMessage}</p> : null}
+
+      <div className="page-card profile-hero-card">
+        <div className="profile-hero-main">
+          <div className="profile-avatar-stack">
+            <AvatarPreview name={displayName} avatar={avatarValue} large />
+            <button type="button" className="ghost-button" onClick={() => setActiveTab('summary')}>
+              编辑头像和资料
+            </button>
           </div>
 
+          <div className="profile-hero-copy">
+            <h1>{displayName}</h1>
+            <p>{summary?.email || currentUser.email || '暂未填写邮箱'}</p>
+            <div className="profile-hero-meta">
+              <span className="news-category-chip">{summary?.role || currentUser.role}</span>
+              <span>用户名 {summary?.username || currentUser.username}</span>
+              <span>{summary?.phone || currentUser.phone || '暂未填写手机号'}</span>
+            </div>
+          </div>
+
+          <div className="profile-hero-actions">
+            <button type="button" className="primary-button" onClick={() => setActiveTab('summary')}>
+              修改资料
+            </button>
+            <button type="button" className="ghost-button" onClick={() => setActiveTab('settings')}>
+              账号设置
+            </button>
+          </div>
+        </div>
+
+        <div className="profile-stats-grid profile-hero-stats">
+          <StatCard label="浏览" value={summary?.historyCount ?? 0} />
+          <StatCard label="点赞" value={summary?.likeCount ?? 0} />
+          <StatCard label="收藏" value={summary?.favoriteCount ?? 0} />
+          <StatCard label="评论" value={summary?.commentCount ?? 0} />
+        </div>
+      </div>
+
+      <div className="page-card profile-shell">
+        <aside className="profile-sidebar">
           <div className="profile-tab-list">
             {tabItems.map((item) => (
               <button
@@ -202,14 +312,14 @@ function ProfilePage() {
         </aside>
 
         <div className="profile-content">
-          {errorMessage ? <p className="auth-feedback error">{errorMessage}</p> : null}
-          {successMessage ? <p className="auth-feedback success">{successMessage}</p> : null}
-
           {activeTab === 'summary' ? (
             <ProfileSummaryPanel
               summary={summary}
-              selectedInterestTags={selectedInterestTags}
+              profileForm={profileForm}
               isLoading={isLoading}
+              isSavingProfile={isSavingProfile}
+              onProfileFormChange={setProfileForm}
+              onSaveProfile={handleSaveProfile}
             />
           ) : activeTab === 'interests' ? (
             <ProfileInterestsPanel
@@ -223,11 +333,19 @@ function ProfilePage() {
             />
           ) : activeTab === 'comments' ? (
             <ProfileCommentPanel pageData={commentPageData} isLoading={isLoading} />
+          ) : activeTab === 'settings' ? (
+            <ProfileSettingsPanel
+              passwordForm={passwordForm}
+              isSavingPassword={isSavingPassword}
+              onPasswordFormChange={setPasswordForm}
+              onUpdatePassword={handleUpdatePassword}
+              onSignOut={() => void signOut()}
+            />
           ) : (
             <ProfileNewsPanel pageData={newsPageData} isLoading={isLoading} emptyLabel={activeTab} />
           )}
 
-          {activeTab !== 'summary' && activeTab !== 'interests' ? (
+          {activeTab !== 'summary' && activeTab !== 'interests' && activeTab !== 'settings' ? (
             <div className="pagination-bar home-pagination">
               <button
                 type="button"
@@ -268,12 +386,18 @@ function ProfilePage() {
 
 function ProfileSummaryPanel({
   summary,
-  selectedInterestTags,
+  profileForm,
   isLoading,
+  isSavingProfile,
+  onProfileFormChange,
+  onSaveProfile,
 }: {
   summary: ProfileSummary | null;
-  selectedInterestTags: TagOption[];
+  profileForm: ProfileUpdateRequest;
   isLoading: boolean;
+  isSavingProfile: boolean;
+  onProfileFormChange: Dispatch<SetStateAction<ProfileUpdateRequest>>;
+  onSaveProfile: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   if (isLoading && !summary) {
     return <div className="news-state-card">正在加载个人资料...</div>;
@@ -285,64 +409,60 @@ function ProfileSummaryPanel({
 
   return (
     <div className="profile-summary-panel">
-      <div className="section-heading compact">
-        <div>
-          <p className="page-eyebrow">账户信息</p>
-          <h2>我的资料</h2>
-        </div>
+      <div className="profile-panel-header">
+        <h2>个人资料</h2>
+        <p>头像、昵称、邮箱和手机号都可以在这里统一修改。</p>
       </div>
 
-      <div className="profile-info-grid">
-        <div className="profile-info-card">
-          <span>用户名</span>
-          <strong>{summary.username}</strong>
-        </div>
-        <div className="profile-info-card">
-          <span>昵称</span>
-          <strong>{summary.nickname || summary.username}</strong>
-        </div>
-        <div className="profile-info-card">
-          <span>邮箱</span>
-          <strong>{summary.email || '未设置'}</strong>
-        </div>
-        <div className="profile-info-card">
-          <span>角色</span>
-          <strong>{summary.role}</strong>
-        </div>
-      </div>
-
-      <div className="profile-stats-grid">
-        <StatCard label="浏览数量" value={summary.historyCount} />
-        <StatCard label="点赞数量" value={summary.likeCount} />
-        <StatCard label="收藏数量" value={summary.favoriteCount} />
-        <StatCard label="评论数量" value={summary.commentCount} />
-      </div>
-
-      <div className="profile-interest-preview">
-        <div className="section-heading compact">
-          <div>
-            <p className="page-eyebrow">用户画像</p>
-            <h2>兴趣与行为概况</h2>
+      <div className="profile-edit-layout">
+        <div className="profile-avatar-editor">
+          <AvatarPreview name={summary.nickname || summary.username} avatar={profileForm.avatar || summary.avatar || ''} />
+          <div className="profile-avatar-editor-copy">
+            <strong>头像预览</strong>
+            <span>支持填写头像图片地址，保存后右上角用户头像也会同步更新。</span>
           </div>
         </div>
-        {selectedInterestTags.length === 0 ? (
-          <div className="news-state-card compact-empty-state">
-            你还没有选择兴趣标签。可以前往“兴趣标签”页签完善偏好，系统会更容易给出贴合你的推荐结果。
+
+        <form className="auth-form admin-news-form" onSubmit={onSaveProfile}>
+          <label>
+            昵称
+            <input
+              value={profileForm.nickname}
+              onChange={(event) => onProfileFormChange((current) => ({ ...current, nickname: event.target.value }))}
+              required
+            />
+          </label>
+          <div className="admin-form-grid">
+            <label>
+              邮箱
+              <input
+                type="email"
+                value={profileForm.email}
+                onChange={(event) => onProfileFormChange((current) => ({ ...current, email: event.target.value }))}
+                required
+              />
+            </label>
+            <label>
+              手机号
+              <input
+                value={profileForm.phone ?? ''}
+                onChange={(event) => onProfileFormChange((current) => ({ ...current, phone: event.target.value }))}
+                placeholder="选填"
+              />
+            </label>
           </div>
-        ) : (
-          <>
-            <div className="news-tag-list">
-              {selectedInterestTags.map((tag) => (
-                <span key={tag.id} className="news-tag">
-                  {tag.name}
-                </span>
-              ))}
-            </div>
-            <p className="section-meta">
-              当前已选择 {selectedInterestTags.length} 个兴趣标签，系统会优先推荐命中这些标签，同时结合你的浏览、点赞、收藏、评论行为进行排序。
-            </p>
-          </>
-        )}
+          <label>
+            头像地址
+            <input
+              value={profileForm.avatar ?? ''}
+              onChange={(event) => onProfileFormChange((current) => ({ ...current, avatar: event.target.value }))}
+              placeholder="https://example.com/avatar.png"
+            />
+          </label>
+          <button type="submit" className="primary-button" disabled={isSavingProfile}>
+            {isSavingProfile ? '保存中...' : '保存个人资料'}
+          </button>
+        </form>
       </div>
     </div>
   );
@@ -371,18 +491,14 @@ function ProfileInterestsPanel({
 
   return (
     <div className="profile-summary-panel">
-      <div className="section-heading compact">
-        <div>
-          <p className="page-eyebrow">兴趣管理</p>
-          <h2>兴趣标签</h2>
-        </div>
+      <div className="profile-panel-header">
+        <h2>兴趣标签</h2>
+        <p>选择你感兴趣的内容方向，推荐流会优先匹配这些标签。</p>
       </div>
-
-      <p className="section-meta">选择你感兴趣的标签，系统会优先推荐命中这些标签的新闻内容。</p>
 
       {selectedInterestTags.length > 0 ? (
         <div className="profile-interest-preview-card">
-          <span className="section-meta">当前已选择</span>
+          <strong>已选择的标签</strong>
           <div className="news-tag-list">
             {selectedInterestTags.map((tag) => (
               <span key={tag.id} className="news-tag">
@@ -392,7 +508,7 @@ function ProfileInterestsPanel({
           </div>
         </div>
       ) : (
-        <div className="news-state-card compact-empty-state">你还没有选择兴趣标签，建议先选几个以获得更稳定的个性化推荐。</div>
+        <div className="news-state-card compact-empty-state">你还没有选择兴趣标签。</div>
       )}
 
       <div className="interest-group-list">
@@ -423,6 +539,67 @@ function ProfileInterestsPanel({
   );
 }
 
+function ProfileSettingsPanel({
+  passwordForm,
+  isSavingPassword,
+  onPasswordFormChange,
+  onUpdatePassword,
+  onSignOut,
+}: {
+  passwordForm: PasswordUpdateRequest;
+  isSavingPassword: boolean;
+  onPasswordFormChange: Dispatch<SetStateAction<PasswordUpdateRequest>>;
+  onUpdatePassword: (event: FormEvent<HTMLFormElement>) => void;
+  onSignOut: () => void;
+}) {
+  return (
+    <div className="profile-summary-panel">
+      <div className="profile-panel-header">
+        <h2>账号设置</h2>
+        <p>这里用于修改密码和退出当前账号。</p>
+      </div>
+
+      <form className="auth-form admin-news-form" onSubmit={onUpdatePassword}>
+        <label>
+          当前密码
+          <input
+            type="password"
+            value={passwordForm.currentPassword}
+            onChange={(event) =>
+              onPasswordFormChange((current) => ({ ...current, currentPassword: event.target.value }))
+            }
+            required
+          />
+        </label>
+        <label>
+          新密码
+          <input
+            type="password"
+            value={passwordForm.newPassword}
+            onChange={(event) =>
+              onPasswordFormChange((current) => ({ ...current, newPassword: event.target.value }))
+            }
+            required
+          />
+        </label>
+        <button type="submit" className="primary-button" disabled={isSavingPassword}>
+          {isSavingPassword ? '提交中...' : '修改密码'}
+        </button>
+      </form>
+
+      <div className="profile-signout-card">
+        <div>
+          <strong>退出登录</strong>
+          <p>如果你需要切换账号，可以在这里安全退出当前登录状态。</p>
+        </div>
+        <button type="button" className="ghost-button" onClick={onSignOut}>
+          退出登录
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ProfileNewsPanel({
   pageData,
   isLoading,
@@ -430,7 +607,7 @@ function ProfileNewsPanel({
 }: {
   pageData: PageResult<ProfileNewsItem>;
   isLoading: boolean;
-  emptyLabel: Exclude<ProfileTab, 'summary' | 'interests' | 'comments'>;
+  emptyLabel: Exclude<ProfileTab, 'summary' | 'interests' | 'comments' | 'settings'>;
 }) {
   if (isLoading && pageData.records.length === 0) {
     return <div className="news-state-card">正在加载列表...</div>;
@@ -482,7 +659,7 @@ function ProfileCommentPanel({
   }
 
   if (pageData.records.length === 0) {
-    return <div className="news-state-card">你还没有留下评论，可以去新闻详情页发表第一条看法。</div>;
+    return <div className="news-state-card">你还没有留下评论。</div>;
   }
 
   return (
@@ -506,6 +683,25 @@ function ProfileCommentPanel({
   );
 }
 
+function AvatarPreview({
+  name,
+  avatar,
+  large = false,
+}: {
+  name: string;
+  avatar: string;
+  large?: boolean;
+}) {
+  const initials = getInitials(name);
+  const className = large ? 'profile-avatar-preview large' : 'profile-avatar-preview';
+
+  return (
+    <div className={className}>
+      {avatar ? <img src={avatar} alt={name} /> : <span>{initials}</span>}
+    </div>
+  );
+}
+
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
     <div className="profile-stat-card">
@@ -517,12 +713,28 @@ function StatCard({ label, value }: { label: string; value: number }) {
 
 function getProfileNewsEmptyText(tab: 'history' | 'favorites' | 'likes') {
   if (tab === 'history') {
-    return '你还没有浏览记录，先去首页看看感兴趣的新闻吧。';
+    return '你还没有浏览记录。';
   }
   if (tab === 'favorites') {
-    return '你还没有收藏新闻，可以在详情页点击收藏后再回来查看。';
+    return '你还没有收藏新闻。';
   }
-  return '你还没有点赞记录，可以在详情页给喜欢的内容点个赞。';
+  return '你还没有点赞记录。';
+}
+
+function getInitials(value: string) {
+  const normalized = value.trim();
+  if (!normalized) {
+    return 'U';
+  }
+  if (/^[A-Za-z0-9 ]+$/.test(normalized)) {
+    const initials = normalized
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((segment) => segment[0]?.toUpperCase() ?? '')
+      .join('');
+    return initials || normalized.slice(0, 2).toUpperCase();
+  }
+  return normalized.slice(0, 2).toUpperCase();
 }
 
 function formatDisplayDate(value: string) {

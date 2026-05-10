@@ -10,6 +10,7 @@ export interface AuthUser {
   username: string;
   nickname: string;
   email: string;
+  phone: string | null;
   avatar: string | null;
   role: 'USER' | 'ADMIN';
 }
@@ -128,6 +129,8 @@ export interface NewsListItem {
   heatScore: number;
 }
 
+export interface RelatedNewsItem extends NewsListItem {}
+
 export interface NewsDetail {
   id: number;
   title: string;
@@ -194,11 +197,25 @@ export interface ProfileSummary {
   username: string;
   nickname: string;
   email: string;
+  phone: string | null;
+  avatar: string | null;
   role: 'USER' | 'ADMIN';
   favoriteCount: number;
   likeCount: number;
   commentCount: number;
   historyCount: number;
+}
+
+export interface ProfileUpdateRequest {
+  nickname: string;
+  email: string;
+  phone?: string;
+  avatar?: string;
+}
+
+export interface PasswordUpdateRequest {
+  currentPassword: string;
+  newPassword: string;
 }
 
 export interface ProfileNewsItem {
@@ -319,4 +336,33 @@ export interface AdminCategoryStatItem {
   categoryId: number;
   categoryName: string;
   newsCount: number;
+}
+
+export interface AdminCategoryPayload {
+  name: string;
+  code: string;
+  description: string;
+  sortOrder: number;
+  status: number;
+}
+
+export interface AdminTagPayload {
+  categoryId: number;
+  name: string;
+  code: string;
+  sortOrder: number;
+  status: number;
+}
+
+export interface AdminUserItem {
+  id: number;
+  username: string;
+  nickname: string;
+  email: string;
+  phone: string | null;
+  avatar: string | null;
+  role: 'USER' | 'ADMIN';
+  status: number;
+  createdAt: string;
+  updatedAt: string;
 }
