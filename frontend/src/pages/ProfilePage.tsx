@@ -11,6 +11,7 @@ import {
   updateProfileBasic,
   updateProfileInterests,
   updateProfilePassword,
+  uploadProfileAvatar,
 } from '../api/profile';
 import { useAuth } from '../store';
 import type {
@@ -73,6 +74,7 @@ function ProfilePage() {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isSavingInterests, setIsSavingInterests] = useState(false);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -187,11 +189,32 @@ function ProfilePage() {
 
     try {
       await updateProfileInterests({ tagIds: selectedInterestIds });
+      window.dispatchEvent(new Event('app:interests-updated'));
       setSuccessMessage('兴趣标签已保存');
     } catch (error) {
       setErrorMessage(getErrorMessage(error, '兴趣标签保存失败'));
     } finally {
       setIsSavingInterests(false);
+    }
+  };
+
+  const handleAvatarFileChange = async (file: File | null) => {
+    if (!file) {
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    try {
+      const result = await uploadProfileAvatar(file);
+      setProfileForm((current) => ({ ...current, avatar: result.data }));
+      setSuccessMessage('头像已上传，记得保存个人资料');
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, '头像上传失败'));
+    } finally {
+      setIsUploadingAvatar(false);
     }
   };
 
@@ -318,7 +341,9 @@ function ProfilePage() {
               profileForm={profileForm}
               isLoading={isLoading}
               isSavingProfile={isSavingProfile}
+              isUploadingAvatar={isUploadingAvatar}
               onProfileFormChange={setProfileForm}
+              onAvatarFileChange={handleAvatarFileChange}
               onSaveProfile={handleSaveProfile}
             />
           ) : activeTab === 'interests' ? (
@@ -389,14 +414,18 @@ function ProfileSummaryPanel({
   profileForm,
   isLoading,
   isSavingProfile,
+  isUploadingAvatar,
   onProfileFormChange,
+  onAvatarFileChange,
   onSaveProfile,
 }: {
   summary: ProfileSummary | null;
   profileForm: ProfileUpdateRequest;
   isLoading: boolean;
   isSavingProfile: boolean;
+  isUploadingAvatar: boolean;
   onProfileFormChange: Dispatch<SetStateAction<ProfileUpdateRequest>>;
+  onAvatarFileChange: (file: File | null) => Promise<void>;
   onSaveProfile: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   if (isLoading && !summary) {
@@ -419,8 +448,17 @@ function ProfileSummaryPanel({
           <AvatarPreview name={summary.nickname || summary.username} avatar={profileForm.avatar || summary.avatar || ''} />
           <div className="profile-avatar-editor-copy">
             <strong>头像预览</strong>
-            <span>支持填写头像图片地址，保存后右上角用户头像也会同步更新。</span>
+            <span>支持直接上传头像图片，也可以继续填写图片地址。</span>
           </div>
+          <label className="avatar-upload-field">
+            <span>{isUploadingAvatar ? '正在上传头像...' : '选择本地图片'}</span>
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              disabled={isUploadingAvatar}
+              onChange={(event) => void onAvatarFileChange(event.target.files?.[0] ?? null)}
+            />
+          </label>
         </div>
 
         <form className="auth-form admin-news-form" onSubmit={onSaveProfile}>
@@ -459,7 +497,7 @@ function ProfileSummaryPanel({
               placeholder="https://example.com/avatar.png"
             />
           </label>
-          <button type="submit" className="primary-button" disabled={isSavingProfile}>
+          <button type="submit" className="primary-button" disabled={isSavingProfile || isUploadingAvatar}>
             {isSavingProfile ? '保存中...' : '保存个人资料'}
           </button>
         </form>
@@ -695,11 +733,7 @@ function AvatarPreview({
   const initials = getInitials(name);
   const className = large ? 'profile-avatar-preview large' : 'profile-avatar-preview';
 
-  return (
-    <div className={className}>
-      {avatar ? <img src={avatar} alt={name} /> : <span>{initials}</span>}
-    </div>
-  );
+  return <div className={className}>{avatar ? <img src={avatar} alt={name} /> : <span>{initials}</span>}</div>;
 }
 
 function StatCard({ label, value }: { label: string; value: number }) {

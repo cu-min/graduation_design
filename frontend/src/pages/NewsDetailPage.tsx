@@ -346,7 +346,6 @@ function NewsDetailPage() {
           <div>
             <h2>相关推荐</h2>
           </div>
-          <span className="section-meta">根据分类和标签匹配生成</span>
         </div>
 
         {isRelatedLoading ? (

@@ -186,6 +186,31 @@ graduation_design/
 - 内容聚合与分发系统
 - 具备后台运营能力的内容管理项目
 
+## Docker Deployment
+
+本项目支持 Docker Compose 一键启动。正式部署包含 `mysql`、`redis`、`backend`、`nginx` 四个服务，其中 Nginx 作为统一入口，负责托管前端静态资源，并将 `/api` 请求反向代理到后端服务。
+
+首次启动时，MySQL 容器会创建 `.env` 中配置的数据库，后端启动后会通过 Spring Boot 的 `schema.sql` 和 `data.sql` 自动初始化表结构与初始数据。容器部署会读取仓库根目录的 `.env`，如需重置本地变量，可参考 `.env.example`。
+
+常用命令：
+
+```bash
+docker compose config
+docker compose build
+docker compose up -d
+docker compose ps
+docker compose logs -f backend
+docker compose logs -f nginx
+docker compose down
+docker compose up -d --build
+```
+
+本机已完成正式部署验证：`docker compose build` 成功，`docker compose up -d` 成功，`mysql`、`redis`、`backend` 均为 healthy，`nginx` 正常启动，访问 `http://localhost` 可打开页面，页面功能与接口访问正常。
+
+如果需要清空 Docker 数据库并重新初始化，可以执行 `docker compose down -v` 后再启动；该命令会删除 MySQL 数据卷，请确认数据不需要保留后再使用。
+
+这套部署方式不会替代原有本地开发方式，前端 `npm run dev` 和后端本地启动仍然可继续使用。
+
 ## License
 
 当前仓库未单独声明开源许可证；如需对外开放或商用，请先补充明确的许可证文件与使用规则。

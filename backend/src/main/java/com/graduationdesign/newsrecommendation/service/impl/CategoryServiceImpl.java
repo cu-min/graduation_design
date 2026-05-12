@@ -2,6 +2,8 @@ package com.graduationdesign.newsrecommendation.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.graduationdesign.newsrecommendation.cache.CacheKeys;
 import com.graduationdesign.newsrecommendation.dto.AdminCategoryRequest;
 import com.graduationdesign.newsrecommendation.entity.Category;
 import com.graduationdesign.newsrecommendation.entity.CrawlConfig;
@@ -12,7 +14,10 @@ import com.graduationdesign.newsrecommendation.mapper.CategoryMapper;
 import com.graduationdesign.newsrecommendation.mapper.CrawlConfigMapper;
 import com.graduationdesign.newsrecommendation.mapper.NewsMapper;
 import com.graduationdesign.newsrecommendation.mapper.TagMapper;
+import com.graduationdesign.newsrecommendation.service.AppCacheService;
+import com.graduationdesign.newsrecommendation.service.CacheInvalidationService;
 import com.graduationdesign.newsrecommendation.service.CategoryService;
+import java.time.Duration;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,14 +26,42 @@ import org.springframework.util.StringUtils;
 @Service
 public class CategoryServiceImpl extends ServiceImpl<CategoryMapper, Category> implements CategoryService {
 
+    private static final Duration PUBLIC_CATEGORY_CACHE_TTL = Duration.ofMinutes(30);
+
     private final TagMapper tagMapper;
     private final NewsMapper newsMapper;
     private final CrawlConfigMapper crawlConfigMapper;
+    private final AppCacheService appCacheService;
+    private final CacheInvalidationService cacheInvalidationService;
+    private final ObjectMapper objectMapper;
 
-    public CategoryServiceImpl(TagMapper tagMapper, NewsMapper newsMapper, CrawlConfigMapper crawlConfigMapper) {
+    public CategoryServiceImpl(
+        TagMapper tagMapper,
+        NewsMapper newsMapper,
+        CrawlConfigMapper crawlConfigMapper,
+        AppCacheService appCacheService,
+        CacheInvalidationService cacheInvalidationService,
+        ObjectMapper objectMapper
+    ) {
         this.tagMapper = tagMapper;
         this.newsMapper = newsMapper;
         this.crawlConfigMapper = crawlConfigMapper;
+        this.appCacheService = appCacheService;
+        this.cacheInvalidationService = cacheInvalidationService;
+        this.objectMapper = objectMapper;
+    }
+
+    @Override
+    public List<Category> listPublicCategories() {
+        return appCacheService.getOrLoad(
+            CacheKeys.PUBLIC_CATEGORIES,
+            objectMapper.getTypeFactory().constructCollectionType(List.class, Category.class),
+            PUBLIC_CATEGORY_CACHE_TTL,
+            () -> list(new LambdaQueryWrapper<Category>()
+                .eq(Category::getStatus, 1)
+                .orderByAsc(Category::getSortOrder)
+                .orderByAsc(Category::getId))
+        );
     }
 
     @Override
@@ -47,6 +80,7 @@ public class CategoryServiceImpl extends ServiceImpl<CategoryMapper, Category> i
         Category category = new Category();
         fillCategory(category, request);
         save(category);
+        cacheInvalidationService.evictPublicContentCaches();
     }
 
     @Override
@@ -58,6 +92,7 @@ public class CategoryServiceImpl extends ServiceImpl<CategoryMapper, Category> i
 
         fillCategory(category, request);
         updateById(category);
+        cacheInvalidationService.evictPublicContentCaches();
     }
 
     @Override
@@ -74,6 +109,7 @@ public class CategoryServiceImpl extends ServiceImpl<CategoryMapper, Category> i
             throw new IllegalArgumentException("Current category is referenced by crawl configs and cannot be deleted");
         }
         removeById(id);
+        cacheInvalidationService.evictPublicContentCaches();
     }
 
     @Override
@@ -83,6 +119,7 @@ public class CategoryServiceImpl extends ServiceImpl<CategoryMapper, Category> i
         Category category = getByIdOrThrow(id);
         category.setStatus(status);
         updateById(category);
+        cacheInvalidationService.evictPublicContentCaches();
     }
 
     private Category getByIdOrThrow(Long id) {

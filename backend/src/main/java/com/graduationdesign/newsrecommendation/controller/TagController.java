@@ -22,13 +22,6 @@ public class TagController {
 
     @GetMapping
     public Result<List<Tag>> list(@RequestParam(required = false) Long categoryId) {
-        List<Tag> tags = tagService.list(
-            new LambdaQueryWrapper<Tag>()
-                .eq(Tag::getStatus, 1)
-                .eq(categoryId != null, Tag::getCategoryId, categoryId)
-                .orderByAsc(Tag::getSortOrder)
-                .orderByAsc(Tag::getId)
-        );
-        return Result.success(tags);
+        return Result.success(tagService.listPublicTags(categoryId));
     }
 }

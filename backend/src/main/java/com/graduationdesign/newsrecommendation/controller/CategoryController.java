@@ -21,12 +21,6 @@ public class CategoryController {
 
     @GetMapping
     public Result<List<Category>> list() {
-        List<Category> categories = categoryService.list(
-            new LambdaQueryWrapper<Category>()
-                .eq(Category::getStatus, 1)
-                .orderByAsc(Category::getSortOrder)
-                .orderByAsc(Category::getId)
-        );
-        return Result.success(categories);
+        return Result.success(categoryService.listPublicCategories());
     }
 }

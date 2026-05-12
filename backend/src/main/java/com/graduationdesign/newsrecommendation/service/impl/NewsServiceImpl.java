@@ -3,7 +3,9 @@ package com.graduationdesign.newsrecommendation.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.graduationdesign.newsrecommendation.common.PageResult;
+import com.graduationdesign.newsrecommendation.cache.CacheKeys;
 import com.graduationdesign.newsrecommendation.dto.NewsCreateRequest;
 import com.graduationdesign.newsrecommendation.dto.NewsStatusRequest;
 import com.graduationdesign.newsrecommendation.dto.NewsUpdateRequest;
@@ -17,6 +19,8 @@ import com.graduationdesign.newsrecommendation.mapper.CategoryMapper;
 import com.graduationdesign.newsrecommendation.mapper.NewsMapper;
 import com.graduationdesign.newsrecommendation.mapper.NewsTagMapper;
 import com.graduationdesign.newsrecommendation.mapper.TagMapper;
+import com.graduationdesign.newsrecommendation.service.AppCacheService;
+import com.graduationdesign.newsrecommendation.service.CacheInvalidationService;
 import com.graduationdesign.newsrecommendation.service.NewsService;
 import com.graduationdesign.newsrecommendation.service.UserBehaviorService;
 import com.graduationdesign.newsrecommendation.vo.AdminNewsDetailVO;
@@ -26,6 +30,7 @@ import com.graduationdesign.newsrecommendation.vo.NewsActionStatusVO;
 import com.graduationdesign.newsrecommendation.vo.NewsDetailVO;
 import com.graduationdesign.newsrecommendation.vo.NewsListVO;
 import java.time.LocalDateTime;
+import java.time.Duration;
 import java.util.Comparator;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -42,21 +47,32 @@ import org.springframework.util.StringUtils;
 @Service
 public class NewsServiceImpl extends ServiceImpl<NewsMapper, News> implements NewsService {
 
+    private static final Duration HOT_NEWS_CACHE_TTL = Duration.ofMinutes(10);
+
     private final NewsTagMapper newsTagMapper;
     private final CategoryMapper categoryMapper;
     private final TagMapper tagMapper;
     private final UserBehaviorService userBehaviorService;
+    private final AppCacheService appCacheService;
+    private final CacheInvalidationService cacheInvalidationService;
+    private final ObjectMapper objectMapper;
 
     public NewsServiceImpl(
         NewsTagMapper newsTagMapper,
         CategoryMapper categoryMapper,
         TagMapper tagMapper,
-        UserBehaviorService userBehaviorService
+        UserBehaviorService userBehaviorService,
+        AppCacheService appCacheService,
+        CacheInvalidationService cacheInvalidationService,
+        ObjectMapper objectMapper
     ) {
         this.newsTagMapper = newsTagMapper;
         this.categoryMapper = categoryMapper;
         this.tagMapper = tagMapper;
         this.userBehaviorService = userBehaviorService;
+        this.appCacheService = appCacheService;
+        this.cacheInvalidationService = cacheInvalidationService;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -101,6 +117,7 @@ public class NewsServiceImpl extends ServiceImpl<NewsMapper, News> implements Ne
         save(news);
 
         replaceNewsTags(news.getId(), request.getTagIds());
+        cacheInvalidationService.evictDiscoveryCaches();
     }
 
     @Override
@@ -114,6 +131,7 @@ public class NewsServiceImpl extends ServiceImpl<NewsMapper, News> implements Ne
         fillNews(news, request);
         updateById(news);
         replaceNewsTags(id, request.getTagIds());
+        cacheInvalidationService.evictDiscoveryCaches();
     }
 
     @Override
@@ -122,6 +140,7 @@ public class NewsServiceImpl extends ServiceImpl<NewsMapper, News> implements Ne
         getByIdOrThrow(id);
         newsTagMapper.delete(new LambdaQueryWrapper<NewsTag>().eq(NewsTag::getNewsId, id));
         removeById(id);
+        cacheInvalidationService.evictDiscoveryCaches();
     }
 
     @Override
@@ -133,6 +152,7 @@ public class NewsServiceImpl extends ServiceImpl<NewsMapper, News> implements Ne
         News news = getByIdOrThrow(id);
         news.setStatus(request.getStatus());
         updateById(news);
+        cacheInvalidationService.evictDiscoveryCaches();
     }
 
     @Override
@@ -241,27 +261,34 @@ public class NewsServiceImpl extends ServiceImpl<NewsMapper, News> implements Ne
     @Override
     public List<HotNewsVO> listHotNews(int limit) {
         int safeLimit = Math.min(Math.max(limit, 1), 20);
-        Page<News> pageResult = page(
-            new Page<>(1, safeLimit),
-            new LambdaQueryWrapper<News>()
-                .eq(News::getStatus, 1)
-                .orderByDesc(News::getHeatScore)
-                .orderByDesc(News::getPublishTime)
-                .orderByDesc(News::getId)
+        return appCacheService.getOrLoad(
+            CacheKeys.hotNews(safeLimit),
+            objectMapper.getTypeFactory().constructCollectionType(List.class, HotNewsVO.class),
+            HOT_NEWS_CACHE_TTL,
+            () -> {
+                Page<News> pageResult = page(
+                    new Page<>(1, safeLimit),
+                    new LambdaQueryWrapper<News>()
+                        .eq(News::getStatus, 1)
+                        .orderByDesc(News::getHeatScore)
+                        .orderByDesc(News::getPublishTime)
+                        .orderByDesc(News::getId)
+                );
+
+                if (pageResult.getRecords().isEmpty()) {
+                    return Collections.emptyList();
+                }
+
+                RelatedData relatedData = loadRelatedData(
+                    pageResult.getRecords().stream().map(News::getId).toList(),
+                    pageResult.getRecords().stream().map(News::getCategoryId).filter(Objects::nonNull).distinct().toList()
+                );
+
+                return pageResult.getRecords().stream()
+                    .map(news -> toHotNewsVO(news, relatedData))
+                    .toList();
+            }
         );
-
-        if (pageResult.getRecords().isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        RelatedData relatedData = loadRelatedData(
-            pageResult.getRecords().stream().map(News::getId).toList(),
-            pageResult.getRecords().stream().map(News::getCategoryId).filter(Objects::nonNull).distinct().toList()
-        );
-
-        return pageResult.getRecords().stream()
-            .map(news -> toHotNewsVO(news, relatedData))
-            .toList();
     }
 
     private List<News> queryRelatedCandidates(News currentNews, Set<Long> tagMatchedNewsIds, int safeLimit) {

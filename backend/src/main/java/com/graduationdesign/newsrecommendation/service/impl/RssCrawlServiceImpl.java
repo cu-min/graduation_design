@@ -10,6 +10,7 @@ import com.graduationdesign.newsrecommendation.mapper.CrawlConfigMapper;
 import com.graduationdesign.newsrecommendation.mapper.NewsMapper;
 import com.graduationdesign.newsrecommendation.mapper.NewsTagMapper;
 import com.graduationdesign.newsrecommendation.mapper.TagMapper;
+import com.graduationdesign.newsrecommendation.service.CacheInvalidationService;
 import com.graduationdesign.newsrecommendation.service.CrawlService;
 import com.graduationdesign.newsrecommendation.vo.CrawlRunResultVO;
 import java.io.StringReader;
@@ -55,12 +56,14 @@ public class RssCrawlServiceImpl implements CrawlService {
     private final NewsTagMapper newsTagMapper;
     private final TagMapper tagMapper;
     private final CrawlConfigMapper crawlConfigMapper;
+    private final CacheInvalidationService cacheInvalidationService;
 
     public RssCrawlServiceImpl(
         NewsMapper newsMapper,
         NewsTagMapper newsTagMapper,
         TagMapper tagMapper,
-        CrawlConfigMapper crawlConfigMapper
+        CrawlConfigMapper crawlConfigMapper,
+        CacheInvalidationService cacheInvalidationService
     ) {
         this.httpClient = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER)
@@ -70,6 +73,7 @@ public class RssCrawlServiceImpl implements CrawlService {
         this.newsTagMapper = newsTagMapper;
         this.tagMapper = tagMapper;
         this.crawlConfigMapper = crawlConfigMapper;
+        this.cacheInvalidationService = cacheInvalidationService;
     }
 
     @Override
@@ -132,6 +136,10 @@ public class RssCrawlServiceImpl implements CrawlService {
             } catch (DuplicateKeyException duplicateKeyException) {
                 duplicateCount++;
             }
+        }
+
+        if (insertedCount > 0) {
+            cacheInvalidationService.evictDiscoveryCaches();
         }
 
         CrawlRunResultVO vo = new CrawlRunResultVO();

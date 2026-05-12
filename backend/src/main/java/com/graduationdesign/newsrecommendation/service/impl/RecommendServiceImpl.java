@@ -1,8 +1,10 @@
 package com.graduationdesign.newsrecommendation.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.graduationdesign.newsrecommendation.common.BehaviorActionType;
 import com.graduationdesign.newsrecommendation.common.PageResult;
+import com.graduationdesign.newsrecommendation.cache.CacheKeys;
 import com.graduationdesign.newsrecommendation.entity.Category;
 import com.graduationdesign.newsrecommendation.entity.Comment;
 import com.graduationdesign.newsrecommendation.entity.News;
@@ -18,8 +20,10 @@ import com.graduationdesign.newsrecommendation.mapper.NewsTagMapper;
 import com.graduationdesign.newsrecommendation.mapper.TagMapper;
 import com.graduationdesign.newsrecommendation.mapper.UserBehaviorMapper;
 import com.graduationdesign.newsrecommendation.mapper.UserInterestMapper;
+import com.graduationdesign.newsrecommendation.service.AppCacheService;
 import com.graduationdesign.newsrecommendation.service.RecommendService;
 import com.graduationdesign.newsrecommendation.vo.RecommendNewsVO;
+import java.time.Duration;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -39,6 +43,7 @@ import org.springframework.stereotype.Service;
 public class RecommendServiceImpl implements RecommendService {
 
     private static final double INTEREST_MATCH_SCORE = 50.0;
+    private static final Duration RECOMMEND_CACHE_TTL = Duration.ofMinutes(5);
 
     private final NewsMapper newsMapper;
     private final NewsTagMapper newsTagMapper;
@@ -47,6 +52,8 @@ public class RecommendServiceImpl implements RecommendService {
     private final UserInterestMapper userInterestMapper;
     private final UserBehaviorMapper userBehaviorMapper;
     private final CommentMapper commentMapper;
+    private final AppCacheService appCacheService;
+    private final ObjectMapper objectMapper;
 
     public RecommendServiceImpl(
         NewsMapper newsMapper,
@@ -55,7 +62,9 @@ public class RecommendServiceImpl implements RecommendService {
         CategoryMapper categoryMapper,
         UserInterestMapper userInterestMapper,
         UserBehaviorMapper userBehaviorMapper,
-        CommentMapper commentMapper
+        CommentMapper commentMapper,
+        AppCacheService appCacheService,
+        ObjectMapper objectMapper
     ) {
         this.newsMapper = newsMapper;
         this.newsTagMapper = newsTagMapper;
@@ -64,13 +73,25 @@ public class RecommendServiceImpl implements RecommendService {
         this.userInterestMapper = userInterestMapper;
         this.userBehaviorMapper = userBehaviorMapper;
         this.commentMapper = commentMapper;
+        this.appCacheService = appCacheService;
+        this.objectMapper = objectMapper;
     }
 
     @Override
     public PageResult<RecommendNewsVO> pageRecommendNews(User currentUser, long page, long size) {
         long safePage = Math.max(page, 1);
         long safeSize = Math.max(size, 1);
+        Long userId = currentUser == null ? null : currentUser.getId();
 
+        return appCacheService.getOrLoad(
+            CacheKeys.recommend(userId, safePage, safeSize),
+            objectMapper.getTypeFactory().constructParametricType(PageResult.class, RecommendNewsVO.class),
+            RECOMMEND_CACHE_TTL,
+            () -> buildRecommendPage(currentUser, safePage, safeSize)
+        );
+    }
+
+    private PageResult<RecommendNewsVO> buildRecommendPage(User currentUser, long safePage, long safeSize) {
         List<News> activeNews = newsMapper.selectList(new LambdaQueryWrapper<News>()
             .eq(News::getStatus, 1)
             .orderByDesc(News::getPublishTime)

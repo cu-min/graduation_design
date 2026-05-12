@@ -9,6 +9,7 @@ import com.graduationdesign.newsrecommendation.entity.UserBehavior;
 import com.graduationdesign.newsrecommendation.exception.NotFoundException;
 import com.graduationdesign.newsrecommendation.mapper.NewsMapper;
 import com.graduationdesign.newsrecommendation.mapper.UserBehaviorMapper;
+import com.graduationdesign.newsrecommendation.service.CacheInvalidationService;
 import com.graduationdesign.newsrecommendation.service.UserBehaviorService;
 import com.graduationdesign.newsrecommendation.vo.NewsActionStatusVO;
 import org.springframework.stereotype.Service;
@@ -18,9 +19,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserBehaviorServiceImpl extends ServiceImpl<UserBehaviorMapper, UserBehavior> implements UserBehaviorService {
 
     private final NewsMapper newsMapper;
+    private final CacheInvalidationService cacheInvalidationService;
 
-    public UserBehaviorServiceImpl(NewsMapper newsMapper) {
+    public UserBehaviorServiceImpl(NewsMapper newsMapper, CacheInvalidationService cacheInvalidationService) {
         this.newsMapper = newsMapper;
+        this.cacheInvalidationService = cacheInvalidationService;
     }
 
     @Override
@@ -34,6 +37,7 @@ public class UserBehaviorServiceImpl extends ServiceImpl<UserBehaviorMapper, Use
         behavior.setActionWeight(1.0);
         behavior.setDuration(0);
         save(behavior);
+        cacheInvalidationService.evictRecommendCaches();
     }
 
     @Override
@@ -48,6 +52,7 @@ public class UserBehaviorServiceImpl extends ServiceImpl<UserBehaviorMapper, Use
                     .eq(News::getId, newsId)
                     .setSql("like_count = like_count + 1")
             );
+            cacheInvalidationService.evictDiscoveryCaches();
         }
         return buildStatus(userId, getActiveNews(newsId));
     }
@@ -64,6 +69,7 @@ public class UserBehaviorServiceImpl extends ServiceImpl<UserBehaviorMapper, Use
                     .eq(News::getId, newsId)
                     .setSql("like_count = GREATEST(like_count - " + removedCount + ", 0)")
             );
+            cacheInvalidationService.evictDiscoveryCaches();
         }
         return buildStatus(userId, getActiveNews(newsId));
     }
@@ -80,6 +86,7 @@ public class UserBehaviorServiceImpl extends ServiceImpl<UserBehaviorMapper, Use
                     .eq(News::getId, newsId)
                     .setSql("favorite_count = favorite_count + 1")
             );
+            cacheInvalidationService.evictDiscoveryCaches();
         }
         return buildStatus(userId, getActiveNews(newsId));
     }
@@ -96,6 +103,7 @@ public class UserBehaviorServiceImpl extends ServiceImpl<UserBehaviorMapper, Use
                     .eq(News::getId, newsId)
                     .setSql("favorite_count = GREATEST(favorite_count - " + removedCount + ", 0)")
             );
+            cacheInvalidationService.evictDiscoveryCaches();
         }
         return buildStatus(userId, getActiveNews(newsId));
     }
@@ -106,6 +114,7 @@ public class UserBehaviorServiceImpl extends ServiceImpl<UserBehaviorMapper, Use
         getActiveNews(newsId);
         if (countBehavior(userId, newsId, BehaviorActionType.DISLIKE) == 0) {
             saveBehavior(userId, newsId, BehaviorActionType.DISLIKE);
+            cacheInvalidationService.evictRecommendCaches();
         }
         return buildStatus(userId, getActiveNews(newsId));
     }
@@ -115,6 +124,7 @@ public class UserBehaviorServiceImpl extends ServiceImpl<UserBehaviorMapper, Use
     public NewsActionStatusVO shareNews(Long userId, Long newsId) {
         getActiveNews(newsId);
         saveBehavior(userId, newsId, BehaviorActionType.SHARE);
+        cacheInvalidationService.evictRecommendCaches();
         return buildStatus(userId, getActiveNews(newsId));
     }
 

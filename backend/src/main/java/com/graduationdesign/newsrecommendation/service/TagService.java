@@ -7,6 +7,8 @@ import java.util.List;
 
 public interface TagService extends IService<Tag> {
 
+    List<Tag> listPublicTags(Long categoryId);
+
     List<Tag> listAdminTags(Long categoryId);
 
     void createAdminTag(AdminTagRequest request);

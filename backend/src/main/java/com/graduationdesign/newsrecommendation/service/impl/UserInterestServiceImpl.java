@@ -7,6 +7,7 @@ import com.graduationdesign.newsrecommendation.entity.User;
 import com.graduationdesign.newsrecommendation.entity.UserInterest;
 import com.graduationdesign.newsrecommendation.mapper.TagMapper;
 import com.graduationdesign.newsrecommendation.mapper.UserInterestMapper;
+import com.graduationdesign.newsrecommendation.service.CacheInvalidationService;
 import com.graduationdesign.newsrecommendation.service.UserInterestService;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -19,9 +20,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserInterestServiceImpl extends ServiceImpl<UserInterestMapper, UserInterest> implements UserInterestService {
 
     private final TagMapper tagMapper;
+    private final CacheInvalidationService cacheInvalidationService;
 
-    public UserInterestServiceImpl(TagMapper tagMapper) {
+    public UserInterestServiceImpl(TagMapper tagMapper, CacheInvalidationService cacheInvalidationService) {
         this.tagMapper = tagMapper;
+        this.cacheInvalidationService = cacheInvalidationService;
     }
 
     @Override
@@ -59,5 +62,7 @@ public class UserInterestServiceImpl extends ServiceImpl<UserInterestMapper, Use
             interest.setWeight(1.0);
             save(interest);
         }
+
+        cacheInvalidationService.evictRecommendCaches();
     }
 }

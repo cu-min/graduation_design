@@ -61,3 +61,15 @@ export async function updateProfileInterests(payload: UserInterestUpdateRequest)
   const response = await http.put<ApiResponse<null>>('/profile/interests', payload);
   return response.data;
 }
+
+export async function uploadProfileAvatar(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await http.post<ApiResponse<string>>('/profile/avatar', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return response.data;
+}

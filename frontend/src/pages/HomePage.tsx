@@ -55,12 +55,16 @@ function HomePage() {
     [visiblePage.size, visiblePage.total],
   );
 
-  const loadLatestNews = async (page = 1, size = pageData.size) => {
+  const loadLatestNews = async (
+    page = 1,
+    size = pageData.size,
+    nextFilters: FilterState = filters,
+  ) => {
     const result = await fetchNewsList({
       page,
       size,
-      keyword: filters.keyword.trim() || undefined,
-      categoryId: filters.categoryId ? Number(filters.categoryId) : undefined,
+      keyword: nextFilters.keyword.trim() || undefined,
+      categoryId: nextFilters.categoryId ? Number(nextFilters.categoryId) : undefined,
     });
     setPageData(result.data);
   };
@@ -70,16 +74,20 @@ function HomePage() {
     setRecommendPageData(result.data);
   };
 
-  const loadCurrentFeed = async (page = 1, mode = feedMode) => {
+  const loadCurrentFeed = async (
+    page = 1,
+    mode = feedMode,
+    nextFilters: FilterState = filters,
+  ) => {
     setIsLoading(true);
     setErrorMessage('');
 
     try {
-      const shouldUseRecommendFeed = mode === 'recommend' && !hasActiveFilters;
+      const shouldUseRecommendFeed = mode === 'recommend' && !nextFilters.keyword.trim() && !nextFilters.categoryId;
       if (shouldUseRecommendFeed) {
         await loadRecommendFeed(page, recommendPageData.size);
       } else {
-        await loadLatestNews(page, pageData.size);
+        await loadLatestNews(page, pageData.size, nextFilters);
       }
     } catch (error) {
       setErrorMessage(getErrorMessage(error, '首页新闻数据加载失败，请稍后重试'));
@@ -101,7 +109,7 @@ function HomePage() {
         if (isShowingRecommendFeed) {
           await loadRecommendFeed(1, recommendPageData.size);
         } else {
-          await loadLatestNews(1, pageData.size);
+          await loadLatestNews(1, pageData.size, filters);
         }
       } catch (error) {
         setErrorMessage(getErrorMessage(error, '首页新闻数据加载失败，请稍后重试'));
@@ -113,6 +121,18 @@ function HomePage() {
     void loadInitialData();
   }, [isAuthenticated]);
 
+  useEffect(() => {
+    const handleInterestsUpdated = () => {
+      const nextFilters = { ...initialFilters };
+      setFeedMode('recommend');
+      setFilters(nextFilters);
+      void loadCurrentFeed(1, 'recommend', nextFilters);
+    };
+
+    window.addEventListener('app:interests-updated', handleInterestsUpdated);
+    return () => window.removeEventListener('app:interests-updated', handleInterestsUpdated);
+  }, [feedMode, filters]);
+
   const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     void loadCurrentFeed(1);
@@ -121,9 +141,9 @@ function HomePage() {
   return (
     <section className="news-home-page">
       <div className="home-hero page-card">
-        <h1>面向年轻人的趋势资讯首页</h1>
+        <h1>发现更适合你的新闻流</h1>
         <p className="page-description">
-          登录后默认展示“为你推荐”。推荐结果会结合你的兴趣标签、浏览、点赞、收藏等行为生成，同时保留“最新资讯”入口方便查看普通新闻流。
+          登录后默认展示“为你推荐”，系统会结合兴趣标签和浏览行为持续调整结果，同时保留“最新资讯”便于查看完整新闻流。
         </p>
 
         <div className="feed-mode-tabs">
@@ -194,7 +214,7 @@ function HomePage() {
               <p>
                 {isShowingRecommendFeed
                   ? isAuthenticated
-                    ? '你可以先选择兴趣标签，或者多浏览几篇新闻，系统会逐步生成更贴合你的推荐结果。'
+                    ? '可以先完成兴趣选择，或者继续浏览几篇新闻，系统会逐步生成更贴近你的推荐结果。'
                     : '当前热门推荐为空，你可以切换到“最新资讯”查看普通新闻流。'
                   : '请尝试更换关键词、清空筛选条件，或稍后再回来看看。'}
               </p>

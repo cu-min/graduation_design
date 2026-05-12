@@ -76,11 +76,14 @@ function AuthModal({ isOpen, initialMode = 'login', onClose }: AuthModalProps) {
         nickname: registerForm.nickname?.trim() || undefined,
       });
       setSuccessMessage('注册成功，请使用新账号登录');
-      setMode('login');
-      setLoginForm({
+      const loginResult = await login({
         username: registerForm.username,
-        password: '',
+        password: registerForm.password,
       });
+      signIn(loginResult.data.token, loginResult.data.user);
+      onClose();
+      setMode('login');
+      setLoginForm(initialLoginForm);
       setRegisterForm(initialRegisterForm);
     } catch (error) {
       setErrorMessage(getErrorMessage(error, '注册失败，请稍后重试'));

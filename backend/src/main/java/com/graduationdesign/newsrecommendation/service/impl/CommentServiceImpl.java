@@ -11,6 +11,7 @@ import com.graduationdesign.newsrecommendation.exception.NotFoundException;
 import com.graduationdesign.newsrecommendation.mapper.CommentMapper;
 import com.graduationdesign.newsrecommendation.mapper.NewsMapper;
 import com.graduationdesign.newsrecommendation.mapper.UserMapper;
+import com.graduationdesign.newsrecommendation.service.CacheInvalidationService;
 import com.graduationdesign.newsrecommendation.service.CommentService;
 import com.graduationdesign.newsrecommendation.vo.CommentReplyVO;
 import com.graduationdesign.newsrecommendation.vo.CommentVO;
@@ -30,10 +31,16 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
 
     private final NewsMapper newsMapper;
     private final UserMapper userMapper;
+    private final CacheInvalidationService cacheInvalidationService;
 
-    public CommentServiceImpl(NewsMapper newsMapper, UserMapper userMapper) {
+    public CommentServiceImpl(
+        NewsMapper newsMapper,
+        UserMapper userMapper,
+        CacheInvalidationService cacheInvalidationService
+    ) {
         this.newsMapper = newsMapper;
         this.userMapper = userMapper;
+        this.cacheInvalidationService = cacheInvalidationService;
     }
 
     @Override
@@ -80,6 +87,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
                 .eq(News::getId, newsId)
                 .setSql("comment_count = comment_count + 1")
         );
+        cacheInvalidationService.evictDiscoveryCaches();
     }
 
     @Override
@@ -106,6 +114,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
                 .eq(News::getId, parentComment.getNewsId())
                 .setSql("comment_count = comment_count + 1")
         );
+        cacheInvalidationService.evictDiscoveryCaches();
     }
 
     @Override
@@ -139,6 +148,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
                     .eq(News::getId, comment.getNewsId())
                     .setSql("comment_count = GREATEST(comment_count - " + commentIds.size() + ", 0)")
             );
+            cacheInvalidationService.evictDiscoveryCaches();
         }
     }
 

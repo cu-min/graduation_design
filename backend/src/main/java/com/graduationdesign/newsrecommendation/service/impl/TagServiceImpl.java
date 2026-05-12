@@ -2,6 +2,8 @@ package com.graduationdesign.newsrecommendation.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.graduationdesign.newsrecommendation.cache.CacheKeys;
 import com.graduationdesign.newsrecommendation.dto.AdminTagRequest;
 import com.graduationdesign.newsrecommendation.entity.Category;
 import com.graduationdesign.newsrecommendation.entity.NewsTag;
@@ -12,7 +14,10 @@ import com.graduationdesign.newsrecommendation.mapper.CategoryMapper;
 import com.graduationdesign.newsrecommendation.mapper.NewsTagMapper;
 import com.graduationdesign.newsrecommendation.mapper.TagMapper;
 import com.graduationdesign.newsrecommendation.mapper.UserInterestMapper;
+import com.graduationdesign.newsrecommendation.service.AppCacheService;
+import com.graduationdesign.newsrecommendation.service.CacheInvalidationService;
 import com.graduationdesign.newsrecommendation.service.TagService;
+import java.time.Duration;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,18 +25,43 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagService {
 
+    private static final Duration PUBLIC_TAG_CACHE_TTL = Duration.ofMinutes(30);
+
     private final CategoryMapper categoryMapper;
     private final NewsTagMapper newsTagMapper;
     private final UserInterestMapper userInterestMapper;
+    private final AppCacheService appCacheService;
+    private final CacheInvalidationService cacheInvalidationService;
+    private final ObjectMapper objectMapper;
 
     public TagServiceImpl(
         CategoryMapper categoryMapper,
         NewsTagMapper newsTagMapper,
-        UserInterestMapper userInterestMapper
+        UserInterestMapper userInterestMapper,
+        AppCacheService appCacheService,
+        CacheInvalidationService cacheInvalidationService,
+        ObjectMapper objectMapper
     ) {
         this.categoryMapper = categoryMapper;
         this.newsTagMapper = newsTagMapper;
         this.userInterestMapper = userInterestMapper;
+        this.appCacheService = appCacheService;
+        this.cacheInvalidationService = cacheInvalidationService;
+        this.objectMapper = objectMapper;
+    }
+
+    @Override
+    public List<Tag> listPublicTags(Long categoryId) {
+        return appCacheService.getOrLoad(
+            CacheKeys.publicTags(categoryId),
+            objectMapper.getTypeFactory().constructCollectionType(List.class, Tag.class),
+            PUBLIC_TAG_CACHE_TTL,
+            () -> list(new LambdaQueryWrapper<Tag>()
+                .eq(Tag::getStatus, 1)
+                .eq(categoryId != null, Tag::getCategoryId, categoryId)
+                .orderByAsc(Tag::getSortOrder)
+                .orderByAsc(Tag::getId))
+        );
     }
 
     @Override
@@ -52,6 +82,7 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
         Tag tag = new Tag();
         fillTag(tag, request);
         save(tag);
+        cacheInvalidationService.evictPublicContentCaches();
     }
 
     @Override
@@ -64,6 +95,7 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
 
         fillTag(tag, request);
         updateById(tag);
+        cacheInvalidationService.evictPublicContentCaches();
     }
 
     @Override
@@ -77,6 +109,7 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
             throw new IllegalArgumentException("Current tag is already used by user interests and cannot be deleted");
         }
         removeById(id);
+        cacheInvalidationService.evictPublicContentCaches();
     }
 
     @Override
@@ -86,6 +119,7 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
         Tag tag = getByIdOrThrow(id);
         tag.setStatus(status);
         updateById(tag);
+        cacheInvalidationService.evictPublicContentCaches();
     }
 
     private void validateCategoryExists(Long categoryId) {

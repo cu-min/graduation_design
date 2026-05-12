@@ -23,3 +23,9 @@ security:
 logging:
   level:
     root: warn
+
+app:
+  cache:
+    enabled: false
+  storage:
+    upload-dir: target/test-uploads

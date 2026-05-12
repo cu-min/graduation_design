@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, Outlet, useLocation } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { fetchProfileInterests } from '../api/profile';
 import AuthModal from '../components/AuthModal';
+import InterestOnboardingModal from '../components/InterestOnboardingModal';
 import { useAuth } from '../store';
 
 function MainLayout() {
@@ -8,35 +10,26 @@ function MainLayout() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isInterestOnboardingOpen, setIsInterestOnboardingOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const userMenuRef = useRef<HTMLDivElement | null>(null);
+  const checkedInterestUserIdRef = useRef<number | null>(null);
 
   const isAdminUser = currentUser?.role === 'ADMIN';
   const displayName = currentUser?.nickname || currentUser?.username || '未登录用户';
 
-  const routeMeta = useMemo(() => {
+  const routeLabel = useMemo(() => {
     if (location.pathname.startsWith('/news/')) {
-      return {
-        label: '新闻详情',
-        description: '点击新闻卡片后直接进入详情页，阅读、点赞、收藏和评论都在这里完成。',
-      };
+      return '新闻详情';
     }
     if (location.pathname.startsWith('/profile')) {
-      return {
-        label: '个人中心',
-        description: '资料修改、账号设置、兴趣标签、历史记录和退出登录统一放在个人中心。',
-      };
+      return '个人中心';
     }
     if (location.pathname.startsWith('/admin')) {
-      return {
-        label: '管理后台',
-        description: '仅管理员可见，用于内容运营、采集配置与后台管理。',
-      };
+      return '管理后台';
     }
-    return {
-      label: '首页',
-      description: '进入系统默认看到首页推荐流，不再把详情页和个人中心当成主导航并列展示。',
-    };
+    return '首页';
   }, [location.pathname]);
 
   useEffect(() => {
@@ -65,6 +58,45 @@ function MainLayout() {
     return () => document.removeEventListener('mousedown', handleDocumentClick);
   }, []);
 
+  useEffect(() => {
+    if (!isAuthenticated || !currentUser) {
+      checkedInterestUserIdRef.current = null;
+      setIsInterestOnboardingOpen(false);
+      return;
+    }
+
+    if (checkedInterestUserIdRef.current === currentUser.id) {
+      return;
+    }
+
+    checkedInterestUserIdRef.current = currentUser.id;
+    let cancelled = false;
+
+    const checkInterestStatus = async () => {
+      try {
+        const result = await fetchProfileInterests();
+        if (!cancelled && result.data.length === 0) {
+          setIsInterestOnboardingOpen(true);
+        }
+      } catch {
+        if (!cancelled) {
+          checkedInterestUserIdRef.current = null;
+        }
+      }
+    };
+
+    void checkInterestStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser, isAuthenticated]);
+
+  const handleInterestOnboardingComplete = () => {
+    setIsInterestOnboardingOpen(false);
+    navigate('/');
+  };
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -77,8 +109,7 @@ function MainLayout() {
             </span>
           </Link>
           <div className="header-route-meta">
-            <span className="header-route-pill">{routeMeta.label}</span>
-            <p>{routeMeta.description}</p>
+            <span className="header-route-pill">{routeLabel}</span>
           </div>
         </div>
 
@@ -101,15 +132,11 @@ function MainLayout() {
                 aria-expanded={isUserMenuOpen}
               >
                 <span className="user-avatar" aria-hidden="true">
-                  {currentUser.avatar ? (
-                    <img src={currentUser.avatar} alt={displayName} />
-                  ) : (
-                    getInitials(displayName)
-                  )}
+                  {currentUser.avatar ? <img src={currentUser.avatar} alt={displayName} /> : getInitials(displayName)}
                 </span>
                 <span className="user-entry-copy">
                   <strong>{displayName}</strong>
-                  <small>{isAdminUser ? '管理员账户' : '个人中心入口'}</small>
+                  <small>{isAdminUser ? '管理员账号' : '个人中心入口'}</small>
                 </span>
                 <span className="user-entry-caret" aria-hidden="true">
                   ▾
@@ -135,7 +162,7 @@ function MainLayout() {
                       onClick={() => setIsUserMenuOpen(false)}
                     >
                       <strong>进入管理后台</strong>
-                      <span>仅管理员可见，用于新闻运营、采集管理和后台维护。</span>
+                      <span>仅管理员可见，用于新闻运营、采集配置和后台维护。</span>
                     </Link>
                   ) : null}
                 </div>
@@ -164,6 +191,10 @@ function MainLayout() {
         isOpen={isAuthModalOpen}
         initialMode={authMode}
         onClose={() => setIsAuthModalOpen(false)}
+      />
+      <InterestOnboardingModal
+        isOpen={isInterestOnboardingOpen}
+        onComplete={handleInterestOnboardingComplete}
       />
     </div>
   );
