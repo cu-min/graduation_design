@@ -154,6 +154,12 @@ graduation_design/
 - `AdminDashboardController`：后台统计面板
 - `AdminCrawlConfigController`：采集源管理
 
+## RSS 采集策略
+
+当前系统优先从 RSS item 中获取新闻标题、摘要、链接、发布时间和图片。正文内容会按 `content:encoded`、`encodedContent`、`description`、`summary`、`title` 的顺序读取，并通过 Jsoup 去除 `script`、`style`、`iframe` 等标签后保存为普通正文文本。
+
+当 RSS 正文较短时，系统会尝试访问新闻原文页面，使用常见正文容器（如 `article`、`main`、`.article-content`、`.post-content`、`.entry-content`、`.content`、`#content`）进行轻量级正文抽取；封面图优先使用 RSS 中的 `media:content` / `enclosure`，其次尝试原文页 `og:image` 和正文首张图片。若目标网站限制访问、响应异常或页面结构复杂导致抽取失败，采集任务会回退使用 RSS 摘要，不会因此中断。
+
 ## 数据模型
 
 当前系统围绕以下核心数据表展开：

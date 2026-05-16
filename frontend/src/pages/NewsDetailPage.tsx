@@ -14,6 +14,12 @@ import {
   fetchNewsComments,
   replyComment,
 } from '../api/comments';
+import {
+  DislikeIcon,
+  ShareOneIcon,
+  StarIcon,
+  ThumbsUpIcon,
+} from '../components/icons/NewsDetailIcons';
 import { fetchNewsDetail, fetchRelatedNews } from '../api/news';
 import { useAuth } from '../store';
 import type {
@@ -132,7 +138,7 @@ function NewsDetailPage() {
     try {
       const result = news.liked ? await unlikeNews(news.id) : await likeNews(news.id);
       applyActionStatus(result.data);
-      setActionFeedback(news.liked ? '已取消点赞' : '点赞成功');
+      setActionFeedback('');
     } catch (error) {
       setActionFeedback(getErrorMessage(error, '点赞操作失败'));
     }
@@ -147,7 +153,7 @@ function NewsDetailPage() {
     try {
       const result = news.favorited ? await unfavoriteNews(news.id) : await favoriteNews(news.id);
       applyActionStatus(result.data);
-      setActionFeedback(news.favorited ? '已取消收藏' : '收藏成功');
+      setActionFeedback('');
     } catch (error) {
       setActionFeedback(getErrorMessage(error, '收藏操作失败'));
     }
@@ -162,7 +168,7 @@ function NewsDetailPage() {
     try {
       const result = await dislikeNews(news.id);
       applyActionStatus(result.data);
-      setActionFeedback('已标记为不感兴趣');
+      setActionFeedback('');
     } catch (error) {
       setActionFeedback(getErrorMessage(error, '不感兴趣操作失败'));
     }
@@ -179,7 +185,7 @@ function NewsDetailPage() {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(window.location.href);
       }
-      setActionFeedback('已复制当前链接');
+      setActionFeedback('');
     } catch (error) {
       setActionFeedback(getErrorMessage(error, '分享操作失败'));
     }
@@ -263,9 +269,6 @@ function NewsDetailPage() {
       <div className="page-card news-state-card">
         <h1>新闻暂不可访问</h1>
         <p className="page-description">{errorMessage || '新闻不存在，或该新闻已下线。'}</p>
-        <Link to="/" className="ghost-button">
-          返回首页
-        </Link>
       </div>
     );
   }
@@ -298,31 +301,6 @@ function NewsDetailPage() {
           ))}
         </div>
 
-        <div className="detail-action-bar">
-          <button type="button" className={news.liked ? 'primary-button' : 'ghost-button'} onClick={() => void handleLike()}>
-            {news.liked ? '已点赞' : '点赞'}
-          </button>
-          <button
-            type="button"
-            className={news.favorited ? 'primary-button' : 'ghost-button'}
-            onClick={() => void handleFavorite()}
-          >
-            {news.favorited ? '已收藏' : '收藏'}
-          </button>
-          <button
-            type="button"
-            className={news.disliked ? 'ghost-button active-soft' : 'ghost-button'}
-            onClick={() => void handleDislike()}
-          >
-            {news.disliked ? '已标记不感兴趣' : '不感兴趣'}
-          </button>
-          <button type="button" className="ghost-button" onClick={() => void handleShare()}>
-            分享
-          </button>
-        </div>
-
-        {actionFeedback ? <p className="auth-feedback success">{actionFeedback}</p> : null}
-
         <NewsDetailCover imageUrl={news.coverImage} title={news.title} />
 
         <div className="news-detail-content">
@@ -331,49 +309,51 @@ function NewsDetailPage() {
           ))}
         </div>
 
-        <div className="news-detail-footer">
-          <a href={news.sourceUrl} target="_blank" rel="noreferrer" className="primary-button">
-            打开原文链接
-          </a>
-          <Link to="/" className="ghost-button">
-            返回首页
-          </Link>
+        <div className="detail-actions-panel">
+          <div className="detail-action-bar">
+            <button
+              type="button"
+              className={`detail-action-button ${news.liked ? 'is-active like-action' : ''}`.trim()}
+              onClick={() => void handleLike()}
+            >
+              <ThumbsUpIcon className="detail-action-icon" />
+              <span>点赞 {news.likeCount}</span>
+            </button>
+            <button
+              type="button"
+              className={`detail-action-button ${news.favorited ? 'is-active favorite-action' : ''}`.trim()}
+              onClick={() => void handleFavorite()}
+            >
+              <StarIcon className="detail-action-icon" />
+              <span>收藏 {news.favoriteCount}</span>
+            </button>
+            <button
+              type="button"
+              className={`detail-action-button ${news.disliked ? 'is-active dislike-action' : ''}`.trim()}
+              onClick={() => void handleDislike()}
+            >
+              <DislikeIcon className="detail-action-icon" />
+              <span>不感兴趣</span>
+            </button>
+            <button
+              type="button"
+              className="detail-action-button"
+              onClick={() => void handleShare()}
+            >
+              <ShareOneIcon className="detail-action-icon" />
+              <span>分享</span>
+            </button>
+          </div>
+
+          <div className="source-link-row">
+            <a href={news.sourceUrl} target="_blank" rel="noreferrer" className="article-source-link">
+              打开原文链接
+            </a>
+          </div>
+
+          {actionFeedback ? <p className="auth-feedback error">{actionFeedback}</p> : null}
         </div>
       </article>
-
-      <section className="page-card related-news-section">
-        <div className="section-heading compact">
-          <div>
-            <h2>相关推荐</h2>
-          </div>
-        </div>
-
-        {isRelatedLoading ? (
-          <div className="news-state-card compact-empty-state">正在加载相关推荐...</div>
-        ) : relatedNews.length === 0 ? (
-          <div className="news-state-card compact-empty-state">暂时没有可展示的相关推荐。</div>
-        ) : (
-          <div className="related-news-grid">
-            {relatedNews.map((item) => (
-              <Link key={item.id} to={`/news/${item.id}`} className="related-news-card">
-                <NewsDetailCover imageUrl={item.coverImage} title={item.title} compact />
-                <div className="related-news-body">
-                  <div className="news-card-topline">
-                    <span className="news-category-chip">{item.categoryName}</span>
-                    <span className="news-time">{formatDisplayDate(item.publishTime)}</span>
-                  </div>
-                  <h3>{item.title}</h3>
-                  <p>{item.summary}</p>
-                  <div className="news-metrics">
-                    <span>热度 {item.heatScore}</span>
-                    <span>浏览 {item.viewCount}</span>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
 
       <section className="page-card comment-section">
         <div className="section-heading compact">
@@ -491,6 +471,40 @@ function NewsDetailPage() {
                   </div>
                 ) : null}
               </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="page-card related-news-section">
+        <div className="section-heading compact">
+          <div>
+            <h2>相关推荐</h2>
+          </div>
+        </div>
+
+        {isRelatedLoading ? (
+          <div className="news-state-card compact-empty-state">正在加载相关推荐...</div>
+        ) : relatedNews.length === 0 ? (
+          <div className="news-state-card compact-empty-state">暂时没有可展示的相关推荐。</div>
+        ) : (
+          <div className="related-news-grid">
+            {relatedNews.map((item) => (
+              <Link key={item.id} to={`/news/${item.id}`} className="related-news-card">
+                <NewsDetailCover imageUrl={item.coverImage} title={item.title} compact />
+                <div className="related-news-body">
+                  <div className="news-card-topline">
+                    <span className="news-category-chip">{item.categoryName}</span>
+                    <span className="news-time">{formatDisplayDate(item.publishTime)}</span>
+                  </div>
+                  <h3>{item.title}</h3>
+                  <p>{item.summary}</p>
+                  <div className="news-metrics">
+                    <span>热度 {item.heatScore}</span>
+                    <span>浏览 {item.viewCount}</span>
+                  </div>
+                </div>
+              </Link>
             ))}
           </div>
         )}

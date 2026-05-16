@@ -31,6 +31,9 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import javax.xml.parsers.DocumentBuilderFactory;
+import org.jsoup.Jsoup;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +47,53 @@ import org.xml.sax.InputSource;
 @Service
 public class RssCrawlServiceImpl implements CrawlService {
 
+    private static final Logger log = LoggerFactory.getLogger(RssCrawlServiceImpl.class);
+    private static final String CRAWLER_USER_AGENT = "NewsRecommendationBot/1.0";
+    private static final int RSS_PREVIEW_CONTENT_LENGTH = 1500;
+    private static final int ORIGINAL_CONTENT_MIN_GAIN = 300;
+    private static final Duration RSS_REQUEST_TIMEOUT = Duration.ofSeconds(20);
+    private static final Duration ARTICLE_REQUEST_TIMEOUT = Duration.ofSeconds(10);
+    private static final String IRRELEVANT_ARTICLE_SELECTOR = String.join(", ",
+        "script",
+        "style",
+        "iframe",
+        "nav",
+        "header",
+        "footer",
+        "aside",
+        "form",
+        "button",
+        ".comment",
+        ".comments",
+        ".ad",
+        ".ads",
+        ".advertisement",
+        ".related",
+        ".share",
+        ".social",
+        ".subscribe"
+    );
+    private static final List<String> ARTICLE_CONTAINER_SELECTORS = List.of(
+        "article",
+        "main article",
+        "main",
+        ".article-content",
+        ".post-content",
+        ".entry-content",
+        ".story",
+        ".article",
+        ".content",
+        "#content"
+    );
+    private static final List<String> PREVIEW_MARKERS = List.of(
+        "read full article",
+        "continue reading",
+        "comments",
+        "read more",
+        "阅读全文",
+        "查看全文",
+        "继续阅读"
+    );
     private static final List<DateTimeFormatter> RSS_DATE_FORMATTERS = List.of(
         DateTimeFormatter.RFC_1123_DATE_TIME,
         DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss Z", Locale.ENGLISH),
@@ -104,8 +154,8 @@ public class RssCrawlServiceImpl implements CrawlService {
 
         HttpRequest request = HttpRequest.newBuilder()
             .uri(sourceUri)
-            .timeout(Duration.ofSeconds(20))
-            .header("User-Agent", "NewsRecommendationBot/1.0")
+            .timeout(RSS_REQUEST_TIMEOUT)
+            .header("User-Agent", CRAWLER_USER_AGENT)
             .GET()
             .build();
 
@@ -131,7 +181,7 @@ public class RssCrawlServiceImpl implements CrawlService {
             }
 
             try {
-                persistNews(crawlConfig, item, defaultTagIds);
+                persistNews(crawlConfig, enrichItemFromArticlePageIfNeeded(item), defaultTagIds);
                 insertedCount++;
             } catch (DuplicateKeyException duplicateKeyException) {
                 duplicateCount++;
@@ -170,13 +220,22 @@ public class RssCrawlServiceImpl implements CrawlService {
 
             String title = textOf(itemElement, "title");
             String description = textOf(itemElement, "description");
+            String rssSummary = textOf(itemElement, "summary");
             String link = textOf(itemElement, "link");
             String pubDate = textOf(itemElement, "pubDate");
             String coverImage = findCoverImage(itemElement);
+            String contentSource = firstNonBlank(
+                textOf(itemElement, "content:encoded"),
+                textOf(itemElement, "encodedContent"),
+                description,
+                rssSummary,
+                title
+            );
 
-            String plainDescription = stripHtml(description);
-            String summary = truncate(plainDescription, 300);
-            String content = truncate(StringUtils.hasText(plainDescription) ? plainDescription : title, 4000);
+            String plainSummary = cleanHtmlText(firstNonBlank(description, rssSummary, contentSource, title));
+            String content = cleanHtmlText(contentSource);
+            String bodyImage = findFirstImageInHtml(contentSource, link);
+            String summary = truncate(plainSummary, 300);
 
             items.add(new RssItemData(
                 safeText(title),
@@ -184,6 +243,7 @@ public class RssCrawlServiceImpl implements CrawlService {
                 safeText(content),
                 safeText(link),
                 safeText(coverImage),
+                safeText(bodyImage),
                 parsePublishTime(pubDate)
             ));
         }
@@ -201,6 +261,7 @@ public class RssCrawlServiceImpl implements CrawlService {
 
     private String findCoverImage(Element itemElement) {
         NodeList childNodes = itemElement.getChildNodes();
+        String enclosureImage = "";
         for (int index = 0; index < childNodes.getLength(); index++) {
             Node childNode = childNodes.item(index);
             if (!(childNode instanceof Element childElement)) {
@@ -213,15 +274,25 @@ public class RssCrawlServiceImpl implements CrawlService {
             if ("enclosure".equals(nodeName) && StringUtils.hasText(url)) {
                 String type = childElement.getAttribute("type");
                 if (!StringUtils.hasText(type) || type.startsWith("image/")) {
-                    return url;
+                    enclosureImage = url;
                 }
             }
 
-            if ((nodeName.endsWith("thumbnail") || nodeName.endsWith("content")) && StringUtils.hasText(url)) {
+            if ((nodeName.endsWith("thumbnail") || nodeName.endsWith("content")) && StringUtils.hasText(url)
+                && isImageMedia(childElement)) {
                 return url;
             }
         }
-        return "";
+        return enclosureImage;
+    }
+
+    private boolean isImageMedia(Element element) {
+        String type = element.getAttribute("type");
+        String medium = element.getAttribute("medium");
+        if ("image".equalsIgnoreCase(medium) || (StringUtils.hasText(type) && type.startsWith("image/"))) {
+            return true;
+        }
+        return !StringUtils.hasText(type) && !StringUtils.hasText(medium);
     }
 
     private LocalDateTime parsePublishTime(String value) {
@@ -260,6 +331,121 @@ public class RssCrawlServiceImpl implements CrawlService {
         return newsMapper.selectCount(
             new LambdaQueryWrapper<News>().eq(News::getSourceUrl, sourceUrl)
         ) > 0;
+    }
+
+    private RssItemData enrichItemFromArticlePageIfNeeded(RssItemData item) {
+        String coverImage = firstNonBlank(item.coverImage(), item.bodyImage());
+        if (!shouldFetchOriginalArticle(item.content(), item.summary())) {
+            return new RssItemData(
+                item.title(),
+                item.summary(),
+                cleanFeedPreviewTail(item.content()),
+                item.link(),
+                coverImage,
+                item.bodyImage(),
+                item.publishTime()
+            );
+        }
+
+        ArticlePageData articlePageData = fetchArticlePage(item.link());
+        String content = cleanFeedPreviewTail(item.content());
+        if (StringUtils.hasText(articlePageData.content())
+            && articlePageData.content().length() > cleanTextLength(content) + ORIGINAL_CONTENT_MIN_GAIN) {
+            content = articlePageData.content();
+        }
+        coverImage = firstNonBlank(item.coverImage(), articlePageData.ogImage(), articlePageData.firstImage(), item.bodyImage());
+
+        return new RssItemData(
+            item.title(),
+            item.summary(),
+            content,
+            item.link(),
+            coverImage,
+            item.bodyImage(),
+            item.publishTime()
+        );
+    }
+
+    private ArticlePageData fetchArticlePage(String sourceUrl) {
+        if (!StringUtils.hasText(sourceUrl)) {
+            return ArticlePageData.empty();
+        }
+
+        try {
+            URI articleUri = RemoteUrlValidator.validatePublicHttpUrl(sourceUrl);
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(articleUri)
+                .timeout(ARTICLE_REQUEST_TIMEOUT)
+                .header("User-Agent", CRAWLER_USER_AGENT)
+                .GET()
+                .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                return ArticlePageData.empty();
+            }
+
+            org.jsoup.nodes.Document document = Jsoup.parse(response.body(), sourceUrl);
+            document.select(IRRELEVANT_ARTICLE_SELECTOR).remove();
+            return new ArticlePageData(
+                extractArticleText(document),
+                extractOgImage(document),
+                extractFirstImage(document)
+            );
+        } catch (Exception exception) {
+            log.debug("Article page extraction skipped. sourceUrl={}, error={}", sourceUrl, exception.getMessage());
+            return ArticlePageData.empty();
+        }
+    }
+
+    private String extractArticleText(org.jsoup.nodes.Document document) {
+        ArticleCandidate bestCandidate = ArticleCandidate.empty();
+        for (String selector : ARTICLE_CONTAINER_SELECTORS) {
+            for (org.jsoup.nodes.Element element : document.select(selector)) {
+                ArticleCandidate candidate = buildArticleCandidate(element);
+                if (candidate.score() > bestCandidate.score()) {
+                    bestCandidate = candidate;
+                }
+            }
+        }
+        return bestCandidate.text().length() >= 100 ? bestCandidate.text() : "";
+    }
+
+    private ArticleCandidate buildArticleCandidate(org.jsoup.nodes.Element element) {
+        LinkedHashSet<String> paragraphs = new LinkedHashSet<>();
+        for (org.jsoup.nodes.Element paragraph : element.select("p")) {
+            String paragraphText = normalizeWhitespace(paragraph.text());
+            if (paragraphText.length() >= 20) {
+                paragraphs.add(paragraphText);
+            }
+        }
+
+        if (!paragraphs.isEmpty()) {
+            String text = String.join("\n\n", paragraphs);
+            return new ArticleCandidate(text, text.length() + paragraphs.size() * 200);
+        }
+
+        String text = normalizeWhitespace(element.text());
+        return new ArticleCandidate(text, text.length());
+    }
+
+    private String extractOgImage(org.jsoup.nodes.Document document) {
+        org.jsoup.nodes.Element imageElement = document.selectFirst("meta[property=\"og:image\"], meta[name=\"og:image\"]");
+        if (imageElement == null) {
+            return "";
+        }
+        return firstNonBlank(imageElement.absUrl("content"), imageElement.attr("content"));
+    }
+
+    private String extractFirstImage(org.jsoup.nodes.Document document) {
+        org.jsoup.nodes.Element imageElement = document.selectFirst(
+            "article img[src], main img[src], .article-content img[src], .post-content img[src], "
+                + ".entry-content img[src], .content img[src], #content img[src], img[src]"
+        );
+        if (imageElement == null) {
+            return "";
+        }
+        return firstNonBlank(imageElement.absUrl("src"), imageElement.attr("src"));
     }
 
     @Transactional
@@ -304,20 +490,110 @@ public class RssCrawlServiceImpl implements CrawlService {
         return 25.0;
     }
 
-    private String stripHtml(String value) {
+    private String cleanHtmlText(String value) {
         if (!StringUtils.hasText(value)) {
             return "";
         }
-        return value
-            .replaceAll("<!\\[CDATA\\[", "")
-            .replaceAll("]]>", "")
-            .replaceAll("<[^>]+>", " ")
-            .replace("&nbsp;", " ")
-            .replace("&amp;", "&")
-            .replace("&lt;", "<")
-            .replace("&gt;", ">")
-            .replaceAll("\\s+", " ")
-            .trim();
+        org.jsoup.nodes.Document document = Jsoup.parseBodyFragment(value);
+        document.select("script, style, iframe").remove();
+        return normalizeWhitespace(document.text());
+    }
+
+    private String findFirstImageInHtml(String html, String baseUri) {
+        if (!StringUtils.hasText(html)) {
+            return "";
+        }
+        org.jsoup.nodes.Document document = Jsoup.parseBodyFragment(html, safeText(baseUri));
+        org.jsoup.nodes.Element imageElement = document.selectFirst("img[src]");
+        if (imageElement == null) {
+            return "";
+        }
+        return firstNonBlank(imageElement.absUrl("src"), imageElement.attr("src"));
+    }
+
+    private int cleanTextLength(String value) {
+        return safeText(value).length();
+    }
+
+    private boolean shouldFetchOriginalArticle(String content, String summary) {
+        String safeContent = safeText(content);
+        if (!StringUtils.hasText(safeContent)) {
+            return true;
+        }
+        if (safeContent.length() < RSS_PREVIEW_CONTENT_LENGTH) {
+            return true;
+        }
+        if (containsPreviewMarker(safeContent)) {
+            return true;
+        }
+
+        String safeSummary = safeText(summary);
+        if (StringUtils.hasText(safeSummary)) {
+            String normalizedContent = normalizeForComparison(safeContent);
+            String normalizedSummary = normalizeForComparison(safeSummary);
+            if (normalizedContent.equals(normalizedSummary)
+                || safeContent.length() <= safeSummary.length() + 200) {
+                return true;
+            }
+        }
+
+        return !safeContent.equals(cleanFeedPreviewTail(safeContent));
+    }
+
+    private boolean containsPreviewMarker(String value) {
+        String normalizedValue = value.toLowerCase(Locale.ROOT);
+        for (String marker : PREVIEW_MARKERS) {
+            if (normalizedValue.contains(marker.toLowerCase(Locale.ROOT))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String cleanFeedPreviewTail(String value) {
+        String cleaned = normalizeWhitespace(value);
+        if (!StringUtils.hasText(cleaned)) {
+            return "";
+        }
+
+        cleaned = removeTailFromMarker(cleaned, "Read full article");
+        cleaned = removeTailFromMarker(cleaned, "Continue reading");
+        cleaned = removeTailFromMarker(cleaned, "Read more");
+        cleaned = removeTailFromMarker(cleaned, "阅读全文");
+        cleaned = removeTailFromMarker(cleaned, "查看全文");
+        cleaned = removeTailFromMarker(cleaned, "继续阅读");
+        cleaned = cleaned.replaceAll("(?i)\\s+comments?\\s*$", "");
+        return normalizeWhitespace(cleaned);
+    }
+
+    private String removeTailFromMarker(String value, String marker) {
+        String lowerValue = value.toLowerCase(Locale.ROOT);
+        String lowerMarker = marker.toLowerCase(Locale.ROOT);
+        int markerIndex = lowerValue.indexOf(lowerMarker);
+        if (markerIndex < 0 || markerIndex < Math.max(0, value.length() - 500)) {
+            return value;
+        }
+        return value.substring(0, markerIndex);
+    }
+
+    private String normalizeForComparison(String value) {
+        return safeText(value).replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeWhitespace(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        return value.replaceAll("\\s+", " ").trim();
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value.trim();
+            }
+        }
+        return "";
     }
 
     private String truncate(String value, int maxLength) {
@@ -343,7 +619,27 @@ public class RssCrawlServiceImpl implements CrawlService {
         String content,
         String link,
         String coverImage,
+        String bodyImage,
         LocalDateTime publishTime
     ) {
+    }
+
+    private record ArticlePageData(
+        String content,
+        String ogImage,
+        String firstImage
+    ) {
+        private static ArticlePageData empty() {
+            return new ArticlePageData("", "", "");
+        }
+    }
+
+    private record ArticleCandidate(
+        String text,
+        int score
+    ) {
+        private static ArticleCandidate empty() {
+            return new ArticleCandidate("", 0);
+        }
     }
 }
