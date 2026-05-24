@@ -1,222 +1,307 @@
-# 个性化新闻推荐系统
+# TrendPulse
 
-[![Java](https://img.shields.io/badge/Java-17-1f6feb?style=for-the-badge)](https://www.oracle.com/java/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3-3fb950?style=for-the-badge)](https://spring.io/projects/spring-boot)
-[![React](https://img.shields.io/badge/React-19-61dafb?style=for-the-badge)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6?style=for-the-badge)](https://www.typescriptlang.org/)
-[![MySQL](https://img.shields.io/badge/MySQL-8-005c84?style=for-the-badge)](https://www.mysql.com/)
-[![Redis](https://img.shields.io/badge/Redis-Cache-d73a49?style=for-the-badge)](https://redis.io/)
+TrendPulse 是一个面向内容分发场景的个性化新闻推荐平台，覆盖新闻聚合、RSS 采集、用户互动、兴趣建模、推荐分发和后台运营管理。系统以“内容浏览 + 行为反馈 + 推荐优化 + 管理配置”为核心闭环，适用于资讯聚合、内容社区、垂直媒体和内部信息分发等业务场景。
 
-一个面向内容分发场景的个性化新闻推荐系统，聚焦新闻浏览、用户互动、兴趣建模、推荐分发与后台运营管理。系统提供完整的前后端业务闭环，适用于新闻资讯、内容社区、信息聚合平台等需要“内容推荐 + 内容运营”能力的项目场景。
+![Java](https://img.shields.io/badge/Java-17-1f6feb?style=flat-square)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3-3fb950?style=flat-square)
+![React](https://img.shields.io/badge/React-19-61dafb?style=flat-square)
+![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6?style=flat-square)
+![MySQL](https://img.shields.io/badge/MySQL-8-005c84?style=flat-square)
+![Redis](https://img.shields.io/badge/Redis-7-d73a49?style=flat-square)
 
-## 项目定位
+## 项目概览
 
-这个系统解决的是两个核心问题：
+TrendPulse 将 RSS 内容采集、新闻内容管理、用户行为记录和推荐结果生成整合在同一套前后端系统中。用户可以浏览新闻、搜索内容、表达兴趣反馈；管理员可以维护内容、分类、标签、采集源和用户状态；推荐服务会结合用户兴趣标签、历史行为、内容热度和发布时间生成个性化新闻流。
 
-- 用户端如何更快看到与自己兴趣更匹配的新闻内容
-- 运营端如何更高效地管理新闻、分类、标签、采集源和用户状态
+系统内置五类内容方向：
 
-项目当前已经具备“内容展示 + 用户互动 + 推荐链路 + 后台管理”的基础产品能力，既可以作为内容推荐平台的原型，也可以继续向更完整的线上系统演进。
+- 前沿科技
+- 成长学习
+- 职业机会
+- 数字生活
+- 热点趋势
 
-## 核心能力
+## 功能特性
 
 ### 用户端
 
-- 首页新闻流展示
-- 推荐流与最新资讯切换
+- 新闻列表、热门新闻和个性化推荐流
 - 分类筛选与关键词搜索
-- 新闻详情阅读
-- 点赞、收藏、分享、不感兴趣
-- 评论与回复
-- 个人中心
-- 个人资料编辑
-- 头像展示与头像地址编辑
-- 兴趣标签维护
-- 浏览记录、点赞记录、收藏记录、评论记录
+- 新闻详情、来源跳转、相关推荐
+- 点赞、收藏、分享、不感兴趣反馈
+- 评论与一级回复
+- 个人中心：资料维护、兴趣标签、浏览历史、点赞、收藏、评论记录
+- 空封面与远程图片加载失败的默认封面兜底
+
+### 管理端
+
+- 新闻管理：新增、编辑、删除、上下架、分类/状态/关键词筛选
+- 用户管理：用户列表、角色状态展示、启用/禁用控制
+- 分类与标签管理：维护内容组织结构和推荐标签体系
+- RSS 采集管理：新增、编辑、启停采集源，查看上次采集状态、数量和错误信息
+- 管理首页统计：新闻、用户、评论、行为、采集源和分类分布概览
 
 ### 推荐能力
 
-- 基于兴趣标签的内容偏好建模
-- 基于浏览、点赞、收藏、评论等行为的推荐调整
-- 首页推荐流
-- 新闻详情页相关推荐
-- 热门内容排序与展示
-
-### 后台管理
-
-- 后台新闻管理
-- 分类管理
-- 标签管理
-- 用户管理
-- 采集源管理
-- 内容概览与行为统计
-
-## 业务需求
-
-### 用户需求
-
-- 快速浏览新闻内容，不需要复杂学习成本
-- 能根据个人兴趣看到更相关的内容
-- 能保存、反馈、筛选和沉淀自己的阅读偏好
-- 能统一管理个人资料、账号信息和互动记录
-
-### 运营需求
-
-- 快速新增、编辑、删除和上下架新闻
-- 灵活维护分类、标签和内容组织结构
-- 维护采集源并掌握采集执行情况
-- 查看用户规模、内容规模和基础行为数据
-
-### 系统需求
-
-- 保持用户端和后台端权限边界清晰
-- 推荐链路具备基础可解释性和可扩展性
-- 测试环境可独立运行，不依赖本地手工数据库状态
-- 前后端可独立构建并通过基础校验
-
-## 当前实现范围
-
-### 已完成
-
-- 前后端分离架构
-- 用户认证与权限控制
-- 用户端核心内容浏览链路
-- 用户互动行为采集
-- 推荐流与相关推荐
-- 个人中心资料与账号设置
-- 后台分类、标签、用户、新闻、采集源管理
-- 后端测试环境独立化
-- GitHub Actions 基础 CI
-
-### 持续演进方向
-
-- 注册后的兴趣冷启动引导
-- 更强的协同过滤与混合推荐
-- Redis 缓存进一步落地
-- 更细粒度的后台权限体系
-- 更完整的数据统计与推荐分析能力
-
-## 主要页面
-
-| 页面 | 说明 |
-| --- | --- |
-| 首页 | 展示推荐流、最新资讯、搜索筛选和热门内容 |
-| 新闻详情页 | 展示新闻正文、互动操作、评论回复和相关推荐 |
-| 个人中心 | 管理头像、昵称、邮箱、手机号、兴趣标签与个人记录 |
-| 管理后台 | 管理新闻、分类、标签、用户、采集源与基础统计 |
+- 登录用户基于兴趣标签和行为数据生成个性化推荐
+- 未登录用户返回热门内容推荐
+- 支持 `VIEW`、`LIKE`、`FAVORITE`、`SHARE`、`DISLIKE` 等行为信号
+- `DISLIKE` 内容会从该用户推荐流中过滤
+- 推荐结果包含可解释原因，便于前端展示和调试
 
 ## 技术栈
 
-### 前端
-
-- React 19
-- TypeScript
-- Vite
-- React Router
-- Axios
-
 ### 后端
 
-- Java 17
-- Spring Boot 3
-- Spring Security
-- MyBatis-Plus
-- JWT
+| 技术 | 用途 |
+| --- | --- |
+| Java 17 | 后端运行环境 |
+| Spring Boot 3.3 | Web 应用主框架 |
+| Spring Security | 认证与权限控制 |
+| JWT | 无状态登录鉴权 |
+| MyBatis-Plus | ORM 与数据访问 |
+| MySQL 8 | 主业务数据库 |
+| Redis 7 | 热门内容与推荐结果缓存 |
+| Spring Scheduling | RSS 自动采集调度 |
+| Maven | 依赖管理与构建 |
 
-### 数据与基础设施
+### 前端
 
-- MySQL
-- Redis
-- H2（测试环境）
-- GitHub Actions
+| 技术 | 用途 |
+| --- | --- |
+| React 19 | 前端 UI 框架 |
+| TypeScript | 类型约束 |
+| Vite | 开发与生产构建 |
+| React Router | 前端路由 |
+| Axios | HTTP 请求封装 |
 
-## 项目结构
+## 系统架构
 
 ```text
-graduation_design/
-├─ backend/    Spring Boot 后端
-├─ frontend/   React 前端
-└─ README.md
+User / Admin
+    |
+    v
+React + TypeScript + Vite
+    |
+    | REST API / JWT
+    v
+Spring Boot Backend
+    |
+    +-- Auth / News / Recommend / Comment / Profile APIs
+    +-- Admin APIs
+    +-- RSS Crawl Scheduler
+    |
+    +-- MySQL
+    +-- Redis
 ```
 
-## 后端核心模块
+典型请求链路：
 
-- `AuthController`：登录、注册与身份认证
-- `NewsController`：新闻列表、详情、热门内容、相关推荐
-- `RecommendController`：推荐流接口
-- `CommentController`：评论与回复
-- `ProfileController`：个人资料、密码与个人中心数据
-- `UserBehaviorController`：用户互动行为
-- `AdminNewsController`：后台新闻管理
-- `AdminCategoryController`：后台分类管理
-- `AdminTagController`：后台标签管理
-- `AdminUserController`：后台用户管理
-- `AdminDashboardController`：后台统计面板
-- `AdminCrawlConfigController`：采集源管理
-
-## RSS 采集策略
-
-当前系统优先从 RSS item 中获取新闻标题、摘要、链接、发布时间和图片。正文内容会按 `content:encoded`、`encodedContent`、`description`、`summary`、`title` 的顺序读取，并通过 Jsoup 去除 `script`、`style`、`iframe` 等标签后保存为普通正文文本。
-
-当 RSS 正文较短时，系统会尝试访问新闻原文页面，使用常见正文容器（如 `article`、`main`、`.article-content`、`.post-content`、`.entry-content`、`.content`、`#content`）进行轻量级正文抽取；封面图优先使用 RSS 中的 `media:content` / `enclosure`，其次尝试原文页 `og:image` 和正文首张图片。若目标网站限制访问、响应异常或页面结构复杂导致抽取失败，采集任务会回退使用 RSS 摘要，不会因此中断。
+```text
+前端交互
+  -> Axios 携带 JWT
+  -> Spring Security 校验身份与权限
+  -> Controller 接收请求
+  -> Service 执行业务逻辑
+  -> Mapper 读写 MySQL
+  -> Redis 缓存热点数据或推荐结果
+  -> 前端渲染响应
+```
 
 ## 数据模型
 
-当前系统围绕以下核心数据表展开：
+系统围绕 9 张核心业务表展开：
 
-- `user`
-- `category`
-- `tag`
-- `news`
-- `news_tag`
-- `user_interest`
-- `user_behavior`
-- `comment`
-- `crawl_config`
+| 表名 | 说明 |
+| --- | --- |
+| `user` | 用户账号、密码哈希、角色和状态 |
+| `category` | 新闻分类 |
+| `tag` | 内容标签和推荐标签 |
+| `news` | 新闻正文、来源、封面、统计计数和上下架状态 |
+| `news_tag` | 新闻与标签的多对多关系 |
+| `user_interest` | 用户主动选择的兴趣标签 |
+| `user_behavior` | 浏览、点赞、收藏、分享、不感兴趣等行为日志 |
+| `comment` | 评论和一级回复 |
+| `crawl_config` | RSS 采集源配置和采集状态 |
 
-这些数据共同支撑了内容组织、用户画像、推荐分发、互动记录和后台运营管理。
+## RSS 采集
 
-## 工程状态
+RSS 采集服务会读取采集源配置，按间隔自动抓取启用的 RSS 源。采集时优先解析 RSS item 中的标题、摘要、链接、发布时间、封面和正文内容；当 RSS 正文较短时，会尝试访问原文页面并从常见正文容器中提取正文。若原文页访问失败或结构不适合抽取，系统会回退使用 RSS 摘要，避免单条内容影响整体采集任务。
 
-当前仓库已经具备以下基础工程能力：
+管理端支持手动触发采集，并展示最近一次采集时间、状态、采集数量和错误信息。
 
-- 前端可以独立完成生产构建
-- 后端可以独立完成编译
-- 后端测试使用独立测试配置与内存数据库
-- GitHub 工作流会自动执行前端构建与后端测试
+## 推荐策略
 
-## 适用场景
+推荐分数由兴趣匹配、行为标签、内容热度和发布时间共同决定：
 
-- 新闻资讯平台
-- 兴趣内容推荐产品
-- 内容聚合与分发系统
-- 具备后台运营能力的内容管理项目
+```text
+recommendScore = interestScore + behaviorScore + heatScore + freshnessScore
+```
 
-## Docker Deployment
+行为信号权重：
 
-本项目支持 Docker Compose 一键启动。正式部署包含 `mysql`、`redis`、`backend`、`nginx` 四个服务，其中 Nginx 作为统一入口，负责托管前端静态资源，并将 `/api` 请求反向代理到后端服务。
+| 行为 | 语义 |
+| --- | --- |
+| `VIEW` | 浏览，表示轻度兴趣 |
+| `LIKE` | 点赞，表示明确正反馈 |
+| `FAVORITE` | 收藏，表示强兴趣和复看意愿 |
+| `SHARE` | 分享，表示高价值内容 |
+| `DISLIKE` | 不感兴趣，用于推荐过滤 |
 
-首次启动时，MySQL 容器会创建 `.env` 中配置的数据库，后端启动后会通过 Spring Boot 的 `schema.sql` 和 `data.sql` 自动初始化表结构与初始数据。容器部署会读取仓库根目录的 `.env`，如需重置本地变量，可参考 `.env.example`。
+冷启动策略：
 
-常用命令：
+- 未登录用户：按热度和发布时间展示热门内容
+- 新用户：优先匹配兴趣标签，同时混入热门内容
+- 活跃用户：结合兴趣标签、行为标签、热度和新鲜度排序
+
+## API 概览
+
+```text
+# 认证
+POST   /api/auth/register
+POST   /api/auth/login
+GET    /api/auth/me
+POST   /api/auth/logout
+
+# 新闻与推荐
+GET    /api/news
+GET    /api/news/{id}
+GET    /api/news/hot
+GET    /api/news/{id}/related
+GET    /api/recommend/news
+
+# 用户行为
+POST   /api/news/{id}/like
+DELETE /api/news/{id}/like
+POST   /api/news/{id}/favorite
+DELETE /api/news/{id}/favorite
+POST   /api/news/{id}/share
+POST   /api/news/{id}/dislike
+
+# 评论
+GET    /api/news/{id}/comments
+POST   /api/news/{id}/comments
+POST   /api/comments/{id}/reply
+DELETE /api/comments/{id}
+
+# 个人中心
+GET    /api/profile/summary
+GET    /api/profile/history
+GET    /api/profile/favorites
+GET    /api/profile/likes
+GET    /api/profile/comments
+GET    /api/profile/interests
+PUT    /api/profile/interests
+
+# 管理端
+GET    /api/admin/dashboard/summary
+GET    /api/admin/news
+POST   /api/admin/news
+PUT    /api/admin/news/{id}
+DELETE /api/admin/news/{id}
+GET    /api/admin/users
+GET    /api/admin/categories
+GET    /api/admin/tags
+GET    /api/admin/crawl-configs
+POST   /api/admin/crawl-configs
+PUT    /api/admin/crawl-configs/{id}
+POST   /api/admin/crawl-configs/{id}/crawl
+```
+
+## 快速启动
+
+### Docker Compose
+
+仓库提供 Docker Compose 部署配置，包含 MySQL、Redis、后端服务和 Nginx 前端入口。首次启动时，后端会自动执行 `schema.sql` 和 `data.sql` 初始化表结构与演示数据。
 
 ```bash
-docker compose config
-docker compose build
-docker compose up -d
-docker compose ps
-docker compose logs -f backend
-docker compose logs -f nginx
-docker compose down
 docker compose up -d --build
 ```
 
-本机已完成正式部署验证：`docker compose build` 成功，`docker compose up -d` 成功，`mysql`、`redis`、`backend` 均为 healthy，`nginx` 正常启动，访问 `http://localhost` 可打开页面，页面功能与接口访问正常。
+重置本地数据并重新初始化：
 
-如果需要清空 Docker 数据库并重新初始化，可以执行 `docker compose down -v` 后再启动；该命令会删除 MySQL 数据卷，请确认数据不需要保留后再使用。
+```bash
+docker compose down -v
+docker compose up -d --build
+```
 
-这套部署方式不会替代原有本地开发方式，前端 `npm run dev` 和后端本地启动仍然可继续使用。
+查看服务状态：
+
+```bash
+docker compose ps
+docker compose logs -f backend
+```
+
+默认访问地址：
+
+- 前端入口：`http://localhost`
+- 后端健康检查：`http://localhost/api/health`
+
+### 本地开发
+
+后端：
+
+```bash
+cd backend
+mvn spring-boot:run
+```
+
+前端：
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+前端默认运行在 `http://localhost:5173`。如需指定后端地址，可配置：
+
+```bash
+VITE_API_BASE_URL=http://localhost:8080 npm run dev
+```
+
+## 构建与验证
+
+后端测试：
+
+```bash
+cd backend
+mvn test
+```
+
+前端构建：
+
+```bash
+cd frontend
+npm run build
+```
+
+## 目录结构
+
+```text
+trendpulse/
+├── backend/
+│   ├── Dockerfile
+│   ├── pom.xml
+│   └── src/
+│       ├── main/
+│       │   ├── java/
+│       │   └── resources/
+│       │       ├── schema.sql
+│       │       ├── data.sql
+│       │       └── application.yml
+│       └── test/
+├── frontend/
+│   ├── Dockerfile
+│   ├── package.json
+│   ├── public/
+│   └── src/
+├── deploy/
+│   └── nginx/
+├── docker-compose.yml
+└── README.md
+```
 
 ## License
 
-当前仓库未单独声明开源许可证；如需对外开放或商用，请先补充明确的许可证文件与使用规则。
+MIT
