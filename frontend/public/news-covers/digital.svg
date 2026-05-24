@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-label="数字生活">
+  <defs>
+    <linearGradient id="digital-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#edf7f7"/>
+      <stop offset="0.55" stop-color="#f6f0e7"/>
+      <stop offset="1" stop-color="#e8eef7"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="675" fill="url(#digital-bg)"/>
+  <rect x="365" y="145" width="470" height="360" rx="48" fill="#172033" opacity="0.88"/>
+  <rect x="405" y="190" width="390" height="255" rx="28" fill="#f8fafc"/>
+  <circle cx="600" cy="475" r="18" fill="#f8fafc"/>
+  <path d="M470 270 H730 M470 340 H650" stroke="#a45a00" stroke-width="16" stroke-linecap="round"/>
+  <circle cx="735" cy="340" r="26" fill="#a45a00"/>
+  <text x="96" y="130" fill="#172033" font-family="Microsoft YaHei, Segoe UI, sans-serif" font-size="58" font-weight="800">数字生活</text>
+  <text x="98" y="190" fill="#4a5568" font-family="Microsoft YaHei, Segoe UI, sans-serif" font-size="28">数码产品 / App 推荐 / 软件工具</text>
+</svg>
