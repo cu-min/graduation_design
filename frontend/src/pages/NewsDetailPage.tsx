@@ -29,6 +29,7 @@ import type {
   RelatedNewsItem,
 } from '../types';
 import { openAuthDialog } from '../utils/authDialog';
+import { getDisplayNewsCover, getNewsCoverFallback } from '../utils/newsCover';
 import { getErrorMessage } from '../utils/request';
 
 function NewsDetailPage() {
@@ -301,7 +302,7 @@ function NewsDetailPage() {
           ))}
         </div>
 
-        <NewsDetailCover imageUrl={news.coverImage} title={news.title} />
+        <NewsDetailCover imageUrl={news.coverImage} title={news.title} categoryName={news.categoryName} />
 
         <div className="news-detail-content">
           {news.content.split('\n').filter(Boolean).map((paragraph, index) => (
@@ -491,7 +492,7 @@ function NewsDetailPage() {
           <div className="related-news-grid">
             {relatedNews.map((item) => (
               <Link key={item.id} to={`/news/${item.id}`} className="related-news-card">
-                <NewsDetailCover imageUrl={item.coverImage} title={item.title} compact />
+                <NewsDetailCover imageUrl={item.coverImage} title={item.title} categoryName={item.categoryName} compact />
                 <div className="related-news-body">
                   <div className="news-card-topline">
                     <span className="news-category-chip">{item.categoryName}</span>
@@ -516,26 +517,39 @@ function NewsDetailPage() {
 function NewsDetailCover({
   imageUrl,
   title,
+  categoryName,
   compact = false,
 }: {
-  imageUrl: string;
+  imageUrl?: string | null;
   title: string;
+  categoryName?: string;
   compact?: boolean;
 }) {
   const [hasError, setHasError] = useState(false);
   const className = compact ? 'news-detail-cover related-news-cover' : 'news-detail-cover';
+  const coverUrl = getDisplayNewsCover(imageUrl, categoryName, hasError);
+  const fallbackUrl = getNewsCoverFallback(categoryName);
+  const isFallbackCover = coverUrl === fallbackUrl;
 
-  if (!imageUrl || hasError) {
-    return (
-      <div className={`${className} news-cover-empty`}>
-        <span>{title.slice(0, compact ? 20 : 24)}</span>
-      </div>
-    );
-  }
+  useEffect(() => {
+    setHasError(false);
+  }, [imageUrl, categoryName]);
 
   return (
     <div className={className}>
-      <img src={imageUrl} alt={title} onError={() => setHasError(true)} />
+      <img
+        key={coverUrl}
+        src={coverUrl}
+        alt={title}
+        loading={compact ? 'lazy' : 'eager'}
+        referrerPolicy="no-referrer"
+        decoding={compact ? 'async' : 'auto'}
+        onError={() => {
+          if (!isFallbackCover) {
+            setHasError(true);
+          }
+        }}
+      />
     </div>
   );
 }

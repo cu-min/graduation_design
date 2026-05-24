@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-label="前沿科技">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eef7ff"/>
+      <stop offset="0.5" stop-color="#d8e9f6"/>
+      <stop offset="1" stop-color="#f6efe4"/>
+    </linearGradient>
+    <linearGradient id="line" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1d4ed8"/>
+      <stop offset="1" stop-color="#a45a00"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="675" fill="url(#bg)"/>
+  <circle cx="950" cy="120" r="170" fill="#ffffff" opacity="0.55"/>
+  <circle cx="180" cy="560" r="210" fill="#ffffff" opacity="0.42"/>
+  <g fill="none" stroke="url(#line)" stroke-width="10" stroke-linecap="round" opacity="0.8">
+    <path d="M240 430 C380 250, 520 520, 690 315 S960 210, 1020 330"/>
+    <path d="M260 265 H430 M500 265 H680 M750 265 H920"/>
+  </g>
+  <g fill="#172033">
+    <circle cx="240" cy="430" r="20"/>
+    <circle cx="690" cy="315" r="20"/>
+    <circle cx="1020" cy="330" r="20"/>
+  </g>
+  <text x="96" y="130" fill="#172033" font-family="Microsoft YaHei, Segoe UI, sans-serif" font-size="58" font-weight="800">前沿科技</text>
+  <text x="98" y="190" fill="#4a5568" font-family="Microsoft YaHei, Segoe UI, sans-serif" font-size="28">AI / 大模型 / 科技资讯</text>
+</svg>

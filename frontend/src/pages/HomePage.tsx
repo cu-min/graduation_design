@@ -11,6 +11,7 @@ import type {
   PageResult,
   RecommendNewsItem,
 } from '../types';
+import { getDisplayNewsCover, getNewsCoverFallback } from '../utils/newsCover';
 import { getErrorMessage } from '../utils/request';
 
 type FilterState = {
@@ -224,7 +225,7 @@ function HomePage() {
               {recommendPageData.records.map((item) => (
                 <article key={item.id} className="news-card">
                   <Link to={`/news/${item.id}`} className="news-card-main">
-                    <NewsCover imageUrl={item.coverImage} title={item.title} />
+                    <NewsCover imageUrl={item.coverImage} title={item.title} categoryName={item.categoryName} />
                     <div className="news-card-body">
                       <div className="news-card-topline">
                         <span className="news-category-chip">{item.categoryName}</span>
@@ -262,7 +263,7 @@ function HomePage() {
               {pageData.records.map((item) => (
                 <article key={item.id} className="news-card">
                   <Link to={`/news/${item.id}`} className="news-card-main">
-                    <NewsCover imageUrl={item.coverImage} title={item.title} />
+                    <NewsCover imageUrl={item.coverImage} title={item.title} categoryName={item.categoryName} />
                     <div className="news-card-body">
                       <div className="news-card-topline">
                         <span className="news-category-chip">{item.categoryName}</span>
@@ -350,20 +351,36 @@ function HomePage() {
   );
 }
 
-function NewsCover({ imageUrl, title }: { imageUrl: string; title: string }) {
+function NewsCover({
+  imageUrl,
+  title,
+  categoryName,
+}: {
+  imageUrl: string;
+  title: string;
+  categoryName?: string;
+}) {
   const [hasError, setHasError] = useState(false);
+  const coverUrl = getDisplayNewsCover(imageUrl, categoryName, hasError);
+  const fallbackUrl = getNewsCoverFallback(categoryName);
 
-  if (!imageUrl || hasError) {
-    return (
-      <div className="news-cover news-cover-empty">
-        <span>{title.slice(0, 18)}</span>
-      </div>
-    );
-  }
+  useEffect(() => {
+    setHasError(false);
+  }, [imageUrl, categoryName]);
 
   return (
     <div className="news-cover">
-      <img src={imageUrl} alt={title} onError={() => setHasError(true)} />
+      <img
+        src={coverUrl}
+        alt={title}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => {
+          if (coverUrl !== fallbackUrl) {
+            setHasError(true);
+          }
+        }}
+      />
     </div>
   );
 }

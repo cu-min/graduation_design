@@ -2,10 +2,12 @@ package com.graduationdesign.newsrecommendation.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.graduationdesign.newsrecommendation.common.RemoteUrlValidator;
+import com.graduationdesign.newsrecommendation.entity.Category;
 import com.graduationdesign.newsrecommendation.entity.CrawlConfig;
 import com.graduationdesign.newsrecommendation.entity.News;
 import com.graduationdesign.newsrecommendation.entity.NewsTag;
 import com.graduationdesign.newsrecommendation.entity.Tag;
+import com.graduationdesign.newsrecommendation.mapper.CategoryMapper;
 import com.graduationdesign.newsrecommendation.mapper.CrawlConfigMapper;
 import com.graduationdesign.newsrecommendation.mapper.NewsMapper;
 import com.graduationdesign.newsrecommendation.mapper.NewsTagMapper;
@@ -28,8 +30,11 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import javax.xml.parsers.DocumentBuilderFactory;
 import org.jsoup.Jsoup;
 import org.slf4j.Logger;
@@ -49,6 +54,16 @@ public class RssCrawlServiceImpl implements CrawlService {
 
     private static final Logger log = LoggerFactory.getLogger(RssCrawlServiceImpl.class);
     private static final String CRAWLER_USER_AGENT = "NewsRecommendationBot/1.0";
+    private static final String FRONTIER_TECH_CODE = "FRONTIER_TECH";
+    private static final String GROWTH_LEARNING_CODE = "GROWTH_LEARNING";
+    private static final String CAREER_OPPORTUNITY_CODE = "CAREER_OPPORTUNITY";
+    private static final String DIGITAL_LIFE_CODE = "DIGITAL_LIFE";
+    private static final String HOT_TREND_CODE = "HOT_TREND";
+    private static final String FRONTIER_TECH_COVER = "/news-covers/frontier-tech.svg";
+    private static final String GROWTH_LEARNING_COVER = "/news-covers/growth-learning.svg";
+    private static final String CAREER_OPPORTUNITY_COVER = "/news-covers/career-opportunity.svg";
+    private static final String DIGITAL_LIFE_COVER = "/news-covers/digital-life.svg";
+    private static final String HOT_TREND_COVER = "/news-covers/hot-trend.svg";
     private static final int RSS_PREVIEW_CONTENT_LENGTH = 1500;
     private static final int ORIGINAL_CONTENT_MIN_GAIN = 300;
     private static final Duration RSS_REQUEST_TIMEOUT = Duration.ofSeconds(20);
@@ -105,6 +120,7 @@ public class RssCrawlServiceImpl implements CrawlService {
     private final NewsMapper newsMapper;
     private final NewsTagMapper newsTagMapper;
     private final TagMapper tagMapper;
+    private final CategoryMapper categoryMapper;
     private final CrawlConfigMapper crawlConfigMapper;
     private final CacheInvalidationService cacheInvalidationService;
 
@@ -112,6 +128,7 @@ public class RssCrawlServiceImpl implements CrawlService {
         NewsMapper newsMapper,
         NewsTagMapper newsTagMapper,
         TagMapper tagMapper,
+        CategoryMapper categoryMapper,
         CrawlConfigMapper crawlConfigMapper,
         CacheInvalidationService cacheInvalidationService
     ) {
@@ -122,6 +139,7 @@ public class RssCrawlServiceImpl implements CrawlService {
         this.newsMapper = newsMapper;
         this.newsTagMapper = newsTagMapper;
         this.tagMapper = tagMapper;
+        this.categoryMapper = categoryMapper;
         this.crawlConfigMapper = crawlConfigMapper;
         this.cacheInvalidationService = cacheInvalidationService;
     }
@@ -165,8 +183,6 @@ public class RssCrawlServiceImpl implements CrawlService {
         }
 
         List<RssItemData> items = parseRssItems(response.body());
-        Set<Long> defaultTagIds = loadDefaultTagIds(crawlConfig.getCategoryId());
-
         int insertedCount = 0;
         int duplicateCount = 0;
 
@@ -181,7 +197,7 @@ public class RssCrawlServiceImpl implements CrawlService {
             }
 
             try {
-                persistNews(crawlConfig, enrichItemFromArticlePageIfNeeded(item), defaultTagIds);
+                persistNews(crawlConfig, enrichItemFromArticlePageIfNeeded(item));
                 insertedCount++;
             } catch (DuplicateKeyException duplicateKeyException) {
                 duplicateCount++;
@@ -312,21 +328,6 @@ public class RssCrawlServiceImpl implements CrawlService {
         return LocalDateTime.now();
     }
 
-    private Set<Long> loadDefaultTagIds(Long categoryId) {
-        List<Tag> tags = tagMapper.selectList(
-            new LambdaQueryWrapper<Tag>()
-                .eq(Tag::getCategoryId, categoryId)
-                .eq(Tag::getStatus, 1)
-                .orderByAsc(Tag::getSortOrder)
-                .orderByAsc(Tag::getId)
-        );
-
-        return tags.stream()
-            .map(Tag::getId)
-            .filter(Objects::nonNull)
-            .collect(LinkedHashSet::new, Set::add, Set::addAll);
-    }
-
     private boolean existsBySourceUrl(String sourceUrl) {
         return newsMapper.selectCount(
             new LambdaQueryWrapper<News>().eq(News::getSourceUrl, sourceUrl)
@@ -439,25 +440,34 @@ public class RssCrawlServiceImpl implements CrawlService {
 
     private String extractFirstImage(org.jsoup.nodes.Document document) {
         org.jsoup.nodes.Element imageElement = document.selectFirst(
-            "article img[src], main img[src], .article-content img[src], .post-content img[src], "
-                + ".entry-content img[src], .content img[src], #content img[src], img[src]"
+            "article img[src], article img[data-src], article img[data-original], "
+                + "main img[src], main img[data-src], main img[data-original], "
+                + ".article-content img[src], .article-content img[data-src], .article-content img[data-original], "
+                + ".post-content img[src], .post-content img[data-src], .post-content img[data-original], "
+                + ".entry-content img[src], .entry-content img[data-src], .entry-content img[data-original], "
+                + ".content img[src], .content img[data-src], .content img[data-original], "
+                + "#content img[src], #content img[data-src], #content img[data-original], "
+                + "img[src], img[data-src], img[data-original]"
         );
         if (imageElement == null) {
             return "";
         }
-        return firstNonBlank(imageElement.absUrl("src"), imageElement.attr("src"));
+        return imageUrlOf(imageElement);
     }
 
     @Transactional
-    protected void persistNews(CrawlConfig crawlConfig, RssItemData item, Set<Long> defaultTagIds) {
+    protected void persistNews(CrawlConfig crawlConfig, RssItemData item) {
+        Long categoryId = resolveCategoryId(crawlConfig, item);
+        Set<Long> tagIds = resolveTagIds(item);
+
         News news = new News();
         news.setTitle(truncate(item.title(), 255));
         news.setSummary(truncate(item.summary(), 1000));
         news.setContent(item.content());
         news.setSourceName(crawlConfig.getSourceName());
         news.setSourceUrl(item.link().trim());
-        news.setCoverImage(truncate(item.coverImage(), 500));
-        news.setCategoryId(crawlConfig.getCategoryId());
+        news.setCoverImage(truncate(firstNonBlank(item.coverImage(), defaultCoverImage(categoryId)), 500));
+        news.setCategoryId(categoryId);
         news.setPublishTime(item.publishTime());
         news.setCrawlTime(LocalDateTime.now());
         news.setStatus(1);
@@ -468,12 +478,148 @@ public class RssCrawlServiceImpl implements CrawlService {
         news.setHeatScore(calculateInitialHeatScore(item.publishTime()));
         newsMapper.insert(news);
 
-        for (Long tagId : defaultTagIds) {
-            NewsTag newsTag = new NewsTag();
-            newsTag.setNewsId(news.getId());
-            newsTag.setTagId(tagId);
-            newsTagMapper.insert(newsTag);
+        for (Long tagId : tagIds) {
+            try {
+                NewsTag newsTag = new NewsTag();
+                newsTag.setNewsId(news.getId());
+                newsTag.setTagId(tagId);
+                newsTagMapper.insert(newsTag);
+            } catch (Exception exception) {
+                log.warn("RSS tag binding skipped. newsId={}, tagId={}, error={}", news.getId(), tagId, exception.getMessage());
+            }
         }
+    }
+
+    private Long resolveCategoryId(CrawlConfig crawlConfig, RssItemData item) {
+        if (isActiveCategory(crawlConfig.getCategoryId())) {
+            return crawlConfig.getCategoryId();
+        }
+
+        Long keywordCategoryId = resolveCategoryIdByKeywords(item);
+        if (keywordCategoryId != null) {
+            return keywordCategoryId;
+        }
+
+        return fallbackCategoryId();
+    }
+
+    private boolean isActiveCategory(Long categoryId) {
+        if (categoryId == null) {
+            return false;
+        }
+        Category category = categoryMapper.selectById(categoryId);
+        return category != null && Objects.equals(category.getStatus(), 1);
+    }
+
+    private Long resolveCategoryIdByKeywords(RssItemData item) {
+        String text = searchableText(item);
+        if (containsAny(text, "ai", "模型", "openai", "智能体", "机器人", "芯片", "开源")) {
+            return categoryIdByCode(FRONTIER_TECH_CODE);
+        }
+        if (containsAny(text, "实习", "就业", "招聘", "职业", "远程办公", "简历", "面试")) {
+            return categoryIdByCode(CAREER_OPPORTUNITY_CODE);
+        }
+        if (containsAny(text, "app", "数码", "手机", "电脑", "工具", "软件", "硬件")) {
+            return categoryIdByCode(DIGITAL_LIFE_CODE);
+        }
+        if (containsAny(text, "学习", "英语", "自学", "效率", "阅读", "写作", "知识管理")) {
+            return categoryIdByCode(GROWTH_LEARNING_CODE);
+        }
+        if (containsAny(text, "热点", "平台", "趋势", "社会", "青年", "创业")) {
+            return categoryIdByCode(HOT_TREND_CODE);
+        }
+        return null;
+    }
+
+    private Long fallbackCategoryId() {
+        Long hotTrendCategoryId = categoryIdByCode(HOT_TREND_CODE);
+        if (hotTrendCategoryId != null) {
+            return hotTrendCategoryId;
+        }
+
+        Category category = categoryMapper.selectOne(
+            new LambdaQueryWrapper<Category>()
+                .eq(Category::getStatus, 1)
+                .orderByAsc(Category::getSortOrder)
+                .orderByAsc(Category::getId)
+                .last("LIMIT 1")
+        );
+        if (category == null) {
+            throw new IllegalStateException("No active category is available for crawled news");
+        }
+        return category.getId();
+    }
+
+    private Long categoryIdByCode(String code) {
+        Category category = categoryMapper.selectOne(
+            new LambdaQueryWrapper<Category>()
+                .eq(Category::getCode, code)
+                .eq(Category::getStatus, 1)
+                .last("LIMIT 1")
+        );
+        return category == null ? null : category.getId();
+    }
+
+    private String defaultCoverImage(Long categoryId) {
+        Category category = categoryMapper.selectById(categoryId);
+        if (category == null || !StringUtils.hasText(category.getCode())) {
+            return HOT_TREND_COVER;
+        }
+        return switch (category.getCode()) {
+            case FRONTIER_TECH_CODE -> FRONTIER_TECH_COVER;
+            case GROWTH_LEARNING_CODE -> GROWTH_LEARNING_COVER;
+            case CAREER_OPPORTUNITY_CODE -> CAREER_OPPORTUNITY_COVER;
+            case DIGITAL_LIFE_CODE -> DIGITAL_LIFE_COVER;
+            default -> HOT_TREND_COVER;
+        };
+    }
+
+    private Set<Long> resolveTagIds(RssItemData item) {
+        String text = searchableText(item);
+        Map<String, Tag> tagsByCode = tagMapper.selectList(
+            new LambdaQueryWrapper<Tag>().eq(Tag::getStatus, 1)
+        ).stream().collect(Collectors.toMap(Tag::getCode, Function.identity(), (left, right) -> left));
+
+        Set<Long> tagIds = new LinkedHashSet<>();
+        addTagIfMatches(tagIds, tagsByCode, "AI", text, "ai", "openai", "智能体");
+        addTagIfMatches(tagIds, tagsByCode, "LLM", text, "模型", "大模型", "llm");
+        addTagIfMatches(tagIds, tagsByCode, "ROBOT", text, "机器人");
+        addTagIfMatches(tagIds, tagsByCode, "INTERNSHIP_EMPLOYMENT", text, "实习", "就业", "招聘");
+        addTagIfMatches(tagIds, tagsByCode, "NEW_CAREER", text, "新职业", "职业");
+        addTagIfMatches(tagIds, tagsByCode, "REMOTE_WORK", text, "远程办公", "远程");
+        addTagIfMatches(tagIds, tagsByCode, "APP_RECOMMENDATION", text, "app", "应用");
+        addTagIfMatches(tagIds, tagsByCode, "DIGITAL_PRODUCT", text, "数码", "手机", "电脑");
+        addTagIfMatches(tagIds, tagsByCode, "SOFTWARE_TOOL", text, "工具", "软件");
+        addTagIfMatches(tagIds, tagsByCode, "ENGLISH_LEARNING", text, "英语");
+        addTagIfMatches(tagIds, tagsByCode, "SELF_LEARNING_METHOD", text, "学习", "自学");
+        addTagIfMatches(tagIds, tagsByCode, "EFFICIENCY_TOOL", text, "效率");
+        addTagIfMatches(tagIds, tagsByCode, "READING_WRITING", text, "阅读", "写作");
+        addTagIfMatches(tagIds, tagsByCode, "SOCIAL_HOT_TOPIC", text, "热点", "社会");
+        addTagIfMatches(tagIds, tagsByCode, "YOUTH_TOPIC", text, "青年");
+        addTagIfMatches(tagIds, tagsByCode, "PLATFORM_DYNAMIC", text, "平台");
+        addTagIfMatches(tagIds, tagsByCode, "BUSINESS_TREND", text, "趋势", "创业");
+        return tagIds;
+    }
+
+    private void addTagIfMatches(Set<Long> tagIds, Map<String, Tag> tagsByCode, String code, String text, String... keywords) {
+        Tag tag = tagsByCode.get(code);
+        if (tag != null && tag.getId() != null && containsAny(text, keywords)) {
+            tagIds.add(tag.getId());
+        }
+    }
+
+    private String searchableText(RssItemData item) {
+        return (safeText(item.title()) + " " + safeText(item.summary()) + " " + safeText(item.content()))
+            .toLowerCase(Locale.ROOT);
+    }
+
+    private boolean containsAny(String text, String... keywords) {
+        for (String keyword : keywords) {
+            if (StringUtils.hasText(keyword) && text.contains(keyword.toLowerCase(Locale.ROOT))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private double calculateInitialHeatScore(LocalDateTime publishTime) {
@@ -504,11 +650,31 @@ public class RssCrawlServiceImpl implements CrawlService {
             return "";
         }
         org.jsoup.nodes.Document document = Jsoup.parseBodyFragment(html, safeText(baseUri));
-        org.jsoup.nodes.Element imageElement = document.selectFirst("img[src]");
+        org.jsoup.nodes.Element imageElement = document.selectFirst(
+            "p img[src], p img[data-src], p img[data-original], figure img[src], figure img[data-src], "
+                + "figure img[data-original], img[src], img[data-src], img[data-original]"
+        );
         if (imageElement == null) {
             return "";
         }
-        return firstNonBlank(imageElement.absUrl("src"), imageElement.attr("src"));
+        return imageUrlOf(imageElement);
+    }
+
+    private String imageUrlOf(org.jsoup.nodes.Element imageElement) {
+        return firstNonBlank(
+            imageElement.absUrl("src"),
+            imageElement.absUrl("data-src"),
+            imageElement.absUrl("data-original"),
+            imageElement.absUrl("data-lazy-src"),
+            imageElement.absUrl("data-original-src"),
+            imageElement.absUrl("data-url"),
+            imageElement.attr("src"),
+            imageElement.attr("data-src"),
+            imageElement.attr("data-original"),
+            imageElement.attr("data-lazy-src"),
+            imageElement.attr("data-original-src"),
+            imageElement.attr("data-url")
+        );
     }
 
     private int cleanTextLength(String value) {

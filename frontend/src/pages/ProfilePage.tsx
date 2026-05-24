@@ -24,6 +24,7 @@ import type {
   TagOption,
 } from '../types';
 import { openAuthDialog } from '../utils/authDialog';
+import { getDisplayNewsCover, getNewsCoverFallback } from '../utils/newsCover';
 import { getErrorMessage } from '../utils/request';
 
 type ProfileTab = 'summary' | 'interests' | 'history' | 'favorites' | 'likes' | 'comments' | 'settings';
@@ -660,9 +661,7 @@ function ProfileNewsPanel({
       {pageData.records.map((item) => (
         <article key={`${item.newsId}-${item.behaviorTime}`} className="news-card compact">
           <Link to={`/news/${item.newsId}`} className="news-card-main">
-            <div className="news-cover">
-              {item.coverImage ? <img src={item.coverImage} alt={item.title} /> : <span>{item.title.slice(0, 18)}</span>}
-            </div>
+            <ProfileNewsCover imageUrl={item.coverImage} title={item.title} categoryName={item.categoryName} />
             <div className="news-card-body">
               <div className="news-card-topline">
                 <span className="news-category-chip">{item.categoryName}</span>
@@ -681,6 +680,40 @@ function ProfileNewsPanel({
           </div>
         </article>
       ))}
+    </div>
+  );
+}
+
+function ProfileNewsCover({
+  imageUrl,
+  title,
+  categoryName,
+}: {
+  imageUrl: string;
+  title: string;
+  categoryName?: string;
+}) {
+  const [hasError, setHasError] = useState(false);
+  const coverUrl = getDisplayNewsCover(imageUrl, categoryName, hasError);
+  const fallbackUrl = getNewsCoverFallback(categoryName);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [imageUrl, categoryName]);
+
+  return (
+    <div className="news-cover">
+      <img
+        src={coverUrl}
+        alt={title}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => {
+          if (coverUrl !== fallbackUrl) {
+            setHasError(true);
+          }
+        }}
+      />
     </div>
   );
 }
