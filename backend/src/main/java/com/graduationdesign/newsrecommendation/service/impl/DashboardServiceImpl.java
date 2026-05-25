@@ -71,7 +71,9 @@ public class DashboardServiceImpl implements DashboardService {
         vo.setLikeBehaviorTotal(countBehaviorByType(BehaviorActionType.LIKE));
         vo.setFavoriteBehaviorTotal(countBehaviorByType(BehaviorActionType.FAVORITE));
         vo.setDislikeBehaviorTotal(countBehaviorByType(BehaviorActionType.DISLIKE));
-        vo.setShareBehaviorTotal(countBehaviorByType(BehaviorActionType.SHARE));
+        long shareCount = countBehaviorByType(BehaviorActionType.SHARE);
+        vo.setShareBehaviorTotal(shareCount);
+        vo.setShareCount(shareCount);
         vo.setTodayCrawledNewsTotal(newsMapper.selectCount(
             new LambdaQueryWrapper<News>()
                 .ge(News::getCrawlTime, todayStart)

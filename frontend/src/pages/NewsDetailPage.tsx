@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   dislikeNews,
@@ -32,6 +32,8 @@ import { openAuthDialog } from '../utils/authDialog';
 import { getDisplayNewsCover, getNewsCoverFallback } from '../utils/newsCover';
 import { getErrorMessage } from '../utils/request';
 
+type CommentSortMode = 'time' | 'hot';
+
 function NewsDetailPage() {
   const { id } = useParams();
   const { isAuthenticated, currentUser } = useAuth();
@@ -47,8 +49,29 @@ function NewsDetailPage() {
   const [replyingCommentId, setReplyingCommentId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionFeedback, setActionFeedback] = useState('');
+  const [actionFeedbackType, setActionFeedbackType] = useState<'success' | 'error'>('success');
+  const [isShareCopied, setIsShareCopied] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [commentSortMode, setCommentSortMode] = useState<CommentSortMode>('time');
 
   const newsId = id ? Number(id) : NaN;
+  const displayCommentCount = comments.length > 0 || !isCommentsLoading ? countComments(comments) : news?.commentCount ?? 0;
+  const sortedComments = useMemo(() => sortComments(comments, commentSortMode), [comments, commentSortMode]);
+
+  const showActionFeedback = (message: string, type: 'success' | 'error') => {
+    setActionFeedback(message);
+    setActionFeedbackType(type);
+  };
+
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    window.setTimeout(() => setToastMessage(''), 2200);
+  };
+
+  const syncCommentCount = (nextComments: CommentItem[]) => {
+    const nextCommentCount = countComments(nextComments);
+    setNews((current) => (current ? { ...current, commentCount: nextCommentCount } : current));
+  };
 
   const loadNewsDetail = async () => {
     if (!newsId || Number.isNaN(newsId)) {
@@ -92,15 +115,17 @@ function NewsDetailPage() {
   const loadComments = async () => {
     if (!newsId || Number.isNaN(newsId)) {
       setIsCommentsLoading(false);
-      return;
+      return [];
     }
 
     setIsCommentsLoading(true);
     try {
       const result = await fetchNewsComments(newsId);
       setComments(result.data);
+      return result.data;
     } catch {
       setComments([]);
+      return [];
     } finally {
       setIsCommentsLoading(false);
     }
@@ -111,7 +136,7 @@ function NewsDetailPage() {
   }, [id, isAuthenticated]);
 
   const requireLogin = () => {
-    setActionFeedback('请先登录后再进行互动操作');
+    showActionFeedback('请先登录后再进行互动操作', 'error');
     openAuthDialog('login');
   };
 
@@ -141,7 +166,7 @@ function NewsDetailPage() {
       applyActionStatus(result.data);
       setActionFeedback('');
     } catch (error) {
-      setActionFeedback(getErrorMessage(error, '点赞操作失败'));
+      showActionFeedback(getErrorMessage(error, '点赞操作失败'), 'error');
     }
   };
 
@@ -156,7 +181,7 @@ function NewsDetailPage() {
       applyActionStatus(result.data);
       setActionFeedback('');
     } catch (error) {
-      setActionFeedback(getErrorMessage(error, '收藏操作失败'));
+      showActionFeedback(getErrorMessage(error, '收藏操作失败'), 'error');
     }
   };
 
@@ -169,9 +194,9 @@ function NewsDetailPage() {
     try {
       const result = await dislikeNews(news.id);
       applyActionStatus(result.data);
-      setActionFeedback('');
+      showActionFeedback('已减少此类内容推荐', 'success');
     } catch (error) {
-      setActionFeedback(getErrorMessage(error, '不感兴趣操作失败'));
+      showActionFeedback(getErrorMessage(error, '不感兴趣操作失败'), 'error');
     }
   };
 
@@ -182,18 +207,20 @@ function NewsDetailPage() {
     }
 
     try {
+      const shareUrl = window.location.href;
       await shareNews(news.id);
       if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(window.location.href);
+        await navigator.clipboard.writeText(shareUrl);
+      } else {
+        copyTextWithFallback(shareUrl);
       }
+      setIsShareCopied(true);
+      window.setTimeout(() => setIsShareCopied(false), 1800);
       setActionFeedback('');
+      showToast('分享链接已复制，可发送给好友打开');
     } catch (error) {
-      setActionFeedback(getErrorMessage(error, '分享操作失败'));
+      showActionFeedback(getErrorMessage(error, '分享操作失败'), 'error');
     }
-  };
-
-  const refreshDetailAndComments = async () => {
-    await Promise.all([loadNewsDetail(), loadRelatedNews(), loadComments()]);
   };
 
   const handleSubmitComment = async (event: FormEvent<HTMLFormElement>) => {
@@ -203,14 +230,18 @@ function NewsDetailPage() {
       return;
     }
 
+    const currentScrollY = window.scrollY;
     setIsSubmitting(true);
     try {
       await createNewsComment(news.id, commentText.trim());
       setCommentText('');
-      setActionFeedback('评论发布成功');
-      await refreshDetailAndComments();
+      setActionFeedback('');
+      showToast('评论发布成功');
+      const nextComments = await loadComments();
+      syncCommentCount(nextComments);
+      restoreScrollPosition(currentScrollY);
     } catch (error) {
-      setActionFeedback(getErrorMessage(error, '评论发布失败'));
+      showActionFeedback(getErrorMessage(error, '评论发布失败'), 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -224,19 +255,23 @@ function NewsDetailPage() {
 
     const content = replyDrafts[commentId]?.trim();
     if (!content) {
-      setActionFeedback('回复内容不能为空');
+      showActionFeedback('回复内容不能为空', 'error');
       return;
     }
 
     setIsSubmitting(true);
+    const currentScrollY = window.scrollY;
     try {
       await replyComment(commentId, content);
       setReplyDrafts((current) => ({ ...current, [commentId]: '' }));
       setReplyingCommentId(null);
-      setActionFeedback('回复成功');
-      await refreshDetailAndComments();
+      setActionFeedback('');
+      showToast('回复成功');
+      const nextComments = await loadComments();
+      syncCommentCount(nextComments);
+      restoreScrollPosition(currentScrollY);
     } catch (error) {
-      setActionFeedback(getErrorMessage(error, '回复失败'));
+      showActionFeedback(getErrorMessage(error, '回复失败'), 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -252,12 +287,16 @@ function NewsDetailPage() {
       return;
     }
 
+    const currentScrollY = window.scrollY;
     try {
       await deleteComment(commentId);
-      setActionFeedback('评论已删除');
-      await refreshDetailAndComments();
+      setActionFeedback('');
+      showToast('评论已删除');
+      const nextComments = await loadComments();
+      syncCommentCount(nextComments);
+      restoreScrollPosition(currentScrollY);
     } catch (error) {
-      setActionFeedback(getErrorMessage(error, '删除评论失败'));
+      showActionFeedback(getErrorMessage(error, '删除评论失败'), 'error');
     }
   };
 
@@ -276,107 +315,162 @@ function NewsDetailPage() {
 
   return (
     <section className="news-detail-page">
-      <article className="page-card news-detail-card">
+      {toastMessage ? <div className="news-detail-toast" role="status">{toastMessage}</div> : null}
+      <article className="page-card news-detail-card news-detail-header-card">
         <div className="news-detail-meta">
-          <span className="news-category-chip">{news.categoryName}</span>
-          <span>{formatDisplayDate(news.publishTime)}</span>
-          <span>{news.sourceName}</span>
+          <span className="detail-meta-line" aria-hidden="true" />
+          <span className="detail-meta-category">{news.categoryName}</span>
+          <span>{formatHeaderDate(news.publishTime)}</span>
         </div>
 
         <h1>{news.title}</h1>
-        <p className="news-detail-summary">{news.summary}</p>
+        {shouldShowSummary(news.summary, news.content) ? (
+          <div className="article-summary">
+            <p>
+              {news.summary}
+              {news.sourceUrl ? (
+                <>
+                  {' '}
+                  <a href={news.sourceUrl} target="_blank" rel="noreferrer">查看全文</a>
+                </>
+              ) : null}
+            </p>
+          </div>
+        ) : null}
 
-        <div className="news-detail-stats">
-          <span>热度 {news.heatScore}</span>
-          <span>浏览 {news.viewCount}</span>
-          <span>点赞 {news.likeCount}</span>
-          <span>收藏 {news.favoriteCount}</span>
-          <span>评论 {news.commentCount}</span>
+        <div className="detail-header-divider" />
+
+        <div className="detail-header-bottom">
+          <div className="detail-source-tags">
+            <span className="detail-source-name">{news.sourceName} RSS</span>
+            <span className="detail-source-separator">·</span>
+            <div className="news-tag-list">
+              {news.tagNames.map((tagName) => (
+                <span key={tagName} className="news-tag">
+                  {tagName}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="news-detail-stats">
+            <span className="stat-item heat"><span className="stat-symbol">热</span><strong>{news.heatScore}</strong></span>
+            <span className="stat-item"><span className="stat-symbol">览</span><strong>{news.viewCount}</strong></span>
+            <span className="stat-item"><span className="stat-symbol">赞</span><strong>{news.likeCount}</strong></span>
+            <span className="stat-item"><span className="stat-symbol">藏</span><strong>{news.favoriteCount}</strong></span>
+            <span className="stat-item"><span className="stat-symbol">评</span><strong>{displayCommentCount}</strong></span>
+          </div>
         </div>
+      </article>
 
-        <div className="news-tag-list">
-          {news.tagNames.map((tagName) => (
-            <span key={tagName} className="news-tag">
-              {tagName}
-            </span>
-          ))}
-        </div>
+      <section className="page-card news-cover-card">
+        {news.coverImage ? (
+          <NewsDetailCover imageUrl={news.coverImage} title={news.title} categoryName={news.categoryName} />
+        ) : (
+          <div className="news-detail-cover news-detail-cover-placeholder">
+            <span>封面图</span>
+          </div>
+        )}
+      </section>
 
-        <NewsDetailCover imageUrl={news.coverImage} title={news.title} categoryName={news.categoryName} />
-
-        <div className="news-detail-content">
-          {news.content.split('\n').filter(Boolean).map((paragraph, index) => (
-            <p key={`${news.id}-${index}`}>{paragraph}</p>
-          ))}
-        </div>
+      <article className="page-card news-detail-card news-article-card">
+        <article className="news-detail-content article-content">
+          {renderArticleContent(news.content)}
+        </article>
 
         <div className="detail-actions-panel">
           <div className="detail-action-bar">
-            <button
-              type="button"
-              className={`detail-action-button ${news.liked ? 'is-active like-action' : ''}`.trim()}
-              onClick={() => void handleLike()}
-            >
-              <ThumbsUpIcon className="detail-action-icon" />
-              <span>点赞 {news.likeCount}</span>
-            </button>
-            <button
-              type="button"
-              className={`detail-action-button ${news.favorited ? 'is-active favorite-action' : ''}`.trim()}
-              onClick={() => void handleFavorite()}
-            >
-              <StarIcon className="detail-action-icon" />
-              <span>收藏 {news.favoriteCount}</span>
-            </button>
-            <button
-              type="button"
-              className={`detail-action-button ${news.disliked ? 'is-active dislike-action' : ''}`.trim()}
-              onClick={() => void handleDislike()}
-            >
-              <DislikeIcon className="detail-action-icon" />
-              <span>不感兴趣</span>
-            </button>
-            <button
-              type="button"
-              className="detail-action-button"
-              onClick={() => void handleShare()}
-            >
-              <ShareOneIcon className="detail-action-icon" />
-              <span>分享</span>
-            </button>
+            <div className="detail-action-group">
+              <button
+                type="button"
+                className={`detail-action-button detail-action-like ${news.liked ? 'is-active' : ''}`.trim()}
+                onClick={() => void handleLike()}
+              >
+                <ThumbsUpIcon className="detail-action-icon" />
+                <span>{news.liked ? '已点赞' : '点赞'} {news.likeCount}</span>
+              </button>
+              <button
+                type="button"
+                className={`detail-action-button detail-action-favorite ${news.favorited ? 'is-active' : ''}`.trim()}
+                onClick={() => void handleFavorite()}
+              >
+                <StarIcon className="detail-action-icon" />
+                <span>收藏 {news.favoriteCount}</span>
+              </button>
+              <button
+                type="button"
+                className={`detail-action-button detail-action-dislike ${news.disliked ? 'is-active' : ''}`.trim()}
+                onClick={() => void handleDislike()}
+              >
+                <DislikeIcon className="detail-action-icon" />
+                <span>{news.disliked ? '已减少推荐' : '不感兴趣'}</span>
+              </button>
+              <button
+                type="button"
+                className="detail-action-button detail-action-share"
+                onClick={() => void handleShare()}
+              >
+                <ShareOneIcon className="detail-action-icon" />
+                <span>{isShareCopied ? '已复制' : '分享'}</span>
+              </button>
+            </div>
+
+            {news.sourceUrl ? (
+              <a href={news.sourceUrl} target="_blank" rel="noreferrer" className="article-source-link">
+                <span className="external-link-mark" aria-hidden="true">↗</span>
+                打开原文 · {getSourceDisplayName(news.sourceUrl, news.sourceName)}
+              </a>
+            ) : null}
           </div>
 
-          <div className="source-link-row">
-            <a href={news.sourceUrl} target="_blank" rel="noreferrer" className="article-source-link">
-              打开原文链接
-            </a>
-          </div>
-
-          {actionFeedback ? <p className="auth-feedback error">{actionFeedback}</p> : null}
+          {actionFeedback ? <p className={`auth-feedback ${actionFeedbackType}`}>{actionFeedback}</p> : null}
         </div>
       </article>
 
       <section className="page-card comment-section">
         <div className="section-heading compact">
-          <div>
+          <div className="comment-title-row">
             <h2>评论与回复</h2>
+            <span className="comment-count-badge">
+              {displayCommentCount > 0 ? `${displayCommentCount} 条评论` : '还没有人评论'}
+            </span>
           </div>
-          <span className="section-meta">共 {news.commentCount} 条评论</span>
+          <label className="comment-sort-control">
+            <span className="sr-only">评论排序</span>
+            <select value={commentSortMode} onChange={(event) => setCommentSortMode(event.target.value as CommentSortMode)}>
+              <option value="time">按时间</option>
+              <option value="hot">按热度</option>
+            </select>
+          </label>
         </div>
 
         <form className="comment-editor" onSubmit={handleSubmitComment}>
-          <textarea
-            value={commentText}
-            onChange={(event) => setCommentText(event.target.value)}
-            placeholder={isAuthenticated ? '写下你的评论（1-500字）' : '登录后可以发表评论'}
-            rows={4}
-          />
+          <div className="comment-editor-row">
+            <div className="comment-avatar" aria-hidden="true">
+              {(currentUser?.nickname || currentUser?.username || '访').slice(0, 1)}
+            </div>
+            <div className="comment-input-shell">
+              <textarea
+                value={commentText}
+                onChange={(event) => setCommentText(event.target.value)}
+                placeholder={isAuthenticated ? '说点什么……第一个评论是你的了' : '登录后可以发表评论'}
+                rows={4}
+              />
+              <div className="comment-input-footer">
+                <span className="section-meta">
+                  {isAuthenticated ? `当前用户：${currentUser?.nickname || currentUser?.username}` : '未登录用户仅可查看评论'}
+                </span>
+                <span className="comment-length">{commentText.length} / 500</span>
+              </div>
+            </div>
+          </div>
           <div className="comment-editor-actions">
-            <span className="section-meta">
-              {isAuthenticated ? `当前用户：${currentUser?.nickname || currentUser?.username}` : '未登录用户仅可查看评论'}
-            </span>
-            <button type="submit" className="primary-button" disabled={isSubmitting}>
-              发布评论
+            <button
+              type="submit"
+              className="primary-button comment-submit-button"
+              disabled={isSubmitting || !commentText.trim()}
+            >
+              {isSubmitting ? '发布中...' : '发布评论'}
             </button>
           </div>
         </form>
@@ -384,10 +478,13 @@ function NewsDetailPage() {
         {isCommentsLoading ? (
           <div className="news-state-card">正在加载评论...</div>
         ) : comments.length === 0 ? (
-          <div className="news-state-card">暂无评论，欢迎留下第一条看法。</div>
+          <div className="news-state-card comment-empty-state">
+            <p>暂无评论，欢迎留下第一条看法。</p>
+            <span>你的评论会用于个性化推荐</span>
+          </div>
         ) : (
           <div className="comment-list">
-            {comments.map((comment) => (
+            {sortedComments.map((comment) => (
               <article key={comment.id} className="comment-card">
                 <div className="comment-header">
                   <div>
@@ -556,6 +653,147 @@ function NewsDetailCover({
 
 function formatDisplayDate(value: string) {
   return value.replace('T', ' ').slice(0, 16);
+}
+
+function formatHeaderDate(value: string) {
+  return formatDisplayDate(value).replace(' ', ' · ');
+}
+
+function renderArticleContent(content?: string) {
+  const paragraphs = formatArticleContent(content);
+  if (paragraphs.length === 0) {
+    return <p className="empty-content">暂无正文内容</p>;
+  }
+
+  return paragraphs.map((paragraph, index) => {
+    const isEndMarker = /^[-—\s]*END[-—\s]*$/i.test(paragraph);
+    const isListLine = /^([-•]\s|\d+[.、]\s)/.test(paragraph);
+    const classNames = [
+      isEndMarker ? 'article-end-marker' : '',
+      isListLine ? 'article-list-line' : '',
+    ].filter(Boolean).join(' ') || undefined;
+    return (
+      <p key={`${index}-${paragraph.slice(0, 12)}`} className={classNames}>
+        {paragraph}
+      </p>
+    );
+  });
+}
+
+function formatArticleContent(content?: string) {
+  if (!content || !content.trim()) {
+    return [];
+  }
+
+  const normalized = stripSimpleHtml(content)
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/\u00a0/g, ' ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n[ \t]+/g, '\n')
+    .trim();
+
+  let paragraphs = normalized
+    .split(/\n{2,}/)
+    .flatMap((block) => block.split(/\n(?=(?:[-•]\s|\d+[.、]\s))/))
+    .map((item) => item.replace(/[ \t]{2,}/g, ' ').trim())
+    .filter(Boolean);
+
+  if (paragraphs.length <= 1 && normalized.length > 300) {
+    paragraphs = splitLongPlainText(normalized);
+  }
+
+  return paragraphs;
+}
+
+function stripSimpleHtml(value: string) {
+  return value
+    .replace(/<\s*br\s*\/?>/gi, '\n')
+    .replace(/<\/\s*(p|div|section|article|li|h[1-6]|blockquote)\s*>/gi, '\n\n')
+    .replace(/<[^>]+>/g, '');
+}
+
+function splitLongPlainText(value: string) {
+  const sentences = value
+    .replace(/([。！？!?])\s*/g, '$1\n')
+    .split(/\n+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const paragraphs: string[] = [];
+  let buffer = '';
+  for (const sentence of sentences) {
+    if (!buffer) {
+      buffer = sentence;
+      continue;
+    }
+    if (buffer.length + sentence.length > 180) {
+      paragraphs.push(buffer);
+      buffer = sentence;
+    } else {
+      buffer += sentence;
+    }
+  }
+  if (buffer) {
+    paragraphs.push(buffer);
+  }
+
+  return paragraphs.length > 0 ? paragraphs : [value];
+}
+
+function shouldShowSummary(summary?: string, content?: string) {
+  if (!summary || !summary.trim()) {
+    return false;
+  }
+  const summaryText = normalizeComparableText(summary);
+  const contentText = normalizeComparableText(content);
+  return Boolean(summaryText) && (!contentText || !contentText.startsWith(summaryText));
+}
+
+function normalizeComparableText(value?: string) {
+  return stripSimpleHtml(value ?? '').replace(/\s+/g, '').slice(0, 220);
+}
+
+function getSourceDisplayName(sourceUrl: string, sourceName: string) {
+  try {
+    return new URL(sourceUrl).hostname.replace(/^www\./, '') || sourceName;
+  } catch {
+    return sourceName;
+  }
+}
+
+function countComments(comments: CommentItem[]) {
+  return comments.reduce((total, comment) => total + 1 + comment.replies.length, 0);
+}
+
+function sortComments(comments: CommentItem[], mode: CommentSortMode) {
+  return [...comments].sort((left, right) => {
+    if (mode === 'hot') {
+      const heatDiff = right.replies.length - left.replies.length;
+      if (heatDiff !== 0) {
+        return heatDiff;
+      }
+    }
+    return Date.parse(right.createdAt) - Date.parse(left.createdAt);
+  });
+}
+
+function restoreScrollPosition(scrollY: number) {
+  requestAnimationFrame(() => {
+    window.scrollTo({ top: scrollY, behavior: 'auto' });
+  });
+}
+
+function copyTextWithFallback(value: string) {
+  const textarea = document.createElement('textarea');
+  textarea.value = value;
+  textarea.setAttribute('readonly', 'readonly');
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  document.body.removeChild(textarea);
 }
 
 export default NewsDetailPage;

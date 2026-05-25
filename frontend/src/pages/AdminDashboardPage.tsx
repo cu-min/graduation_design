@@ -117,6 +117,7 @@ const emptySummary: AdminDashboardSummary = {
   favoriteBehaviorTotal: 0,
   dislikeBehaviorTotal: 0,
   shareBehaviorTotal: 0,
+  shareCount: 0,
   latestCrawlTime: null,
   latestCrawlStatus: null,
   hotNews: [],
@@ -205,7 +206,7 @@ function AdminDashboardPage() {
       { label: '点赞行为', value: summary.likeBehaviorTotal },
       { label: '收藏行为', value: summary.favoriteBehaviorTotal },
       { label: '不感兴趣行为', value: summary.dislikeBehaviorTotal },
-      { label: '分享行为', value: summary.shareBehaviorTotal },
+      { label: '分享行为', value: summary.shareCount },
     ],
     [summary],
   );

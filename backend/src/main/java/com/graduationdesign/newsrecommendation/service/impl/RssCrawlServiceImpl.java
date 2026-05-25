@@ -27,6 +27,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -642,7 +643,10 @@ public class RssCrawlServiceImpl implements CrawlService {
         }
         org.jsoup.nodes.Document document = Jsoup.parseBodyFragment(value);
         document.select("script, style, iframe").remove();
-        return normalizeWhitespace(document.text());
+        document.select("br").forEach(element -> element.after(new org.jsoup.nodes.TextNode("\n")));
+        document.select("p, div, section, article, li, h1, h2, h3, h4, h5, h6, blockquote")
+            .forEach(element -> element.appendChild(new org.jsoup.nodes.TextNode("\n\n")));
+        return normalizeArticleText(document.body().wholeText());
     }
 
     private String findFirstImageInHtml(String html, String baseUri) {
@@ -717,7 +721,7 @@ public class RssCrawlServiceImpl implements CrawlService {
     }
 
     private String cleanFeedPreviewTail(String value) {
-        String cleaned = normalizeWhitespace(value);
+        String cleaned = normalizeArticleText(value);
         if (!StringUtils.hasText(cleaned)) {
             return "";
         }
@@ -729,7 +733,7 @@ public class RssCrawlServiceImpl implements CrawlService {
         cleaned = removeTailFromMarker(cleaned, "查看全文");
         cleaned = removeTailFromMarker(cleaned, "继续阅读");
         cleaned = cleaned.replaceAll("(?i)\\s+comments?\\s*$", "");
-        return normalizeWhitespace(cleaned);
+        return normalizeArticleText(cleaned);
     }
 
     private String removeTailFromMarker(String value, String marker) {
@@ -751,6 +755,25 @@ public class RssCrawlServiceImpl implements CrawlService {
             return "";
         }
         return value.replaceAll("\\s+", " ").trim();
+    }
+
+    private String normalizeArticleText(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        String normalized = value
+            .replace("\r\n", "\n")
+            .replace('\r', '\n')
+            .replace('\u00A0', ' ')
+            .replaceAll("[\\t ]+", " ")
+            .replaceAll(" *\\n *", "\n")
+            .replaceAll("\\n{3,}", "\n\n")
+            .trim();
+        return Arrays.stream(normalized.split("\\n", -1))
+            .map(String::trim)
+            .collect(Collectors.joining("\n"))
+            .replaceAll("\\n{3,}", "\n\n")
+            .trim();
     }
 
     private String firstNonBlank(String... values) {

@@ -318,6 +318,7 @@ export interface AdminDashboardSummary {
   favoriteBehaviorTotal: number;
   dislikeBehaviorTotal: number;
   shareBehaviorTotal: number;
+  shareCount: number;
   latestCrawlTime: string | null;
   latestCrawlStatus: string | null;
   hotNews: AdminHotNewsItem[];

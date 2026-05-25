@@ -19,6 +19,7 @@ public class AdminDashboardSummaryVO {
     private Long favoriteBehaviorTotal;
     private Long dislikeBehaviorTotal;
     private Long shareBehaviorTotal;
+    private Long shareCount;
     private LocalDateTime latestCrawlTime;
     private String latestCrawlStatus;
     private List<AdminHotNewsVO> hotNews;
@@ -134,6 +135,14 @@ public class AdminDashboardSummaryVO {
 
     public void setShareBehaviorTotal(Long shareBehaviorTotal) {
         this.shareBehaviorTotal = shareBehaviorTotal;
+    }
+
+    public Long getShareCount() {
+        return shareCount;
+    }
+
+    public void setShareCount(Long shareCount) {
+        this.shareCount = shareCount;
     }
 
     public LocalDateTime getLatestCrawlTime() {
